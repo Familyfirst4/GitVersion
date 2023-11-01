@@ -30,7 +30,7 @@
         <PackageVersion Include="JunitXml.TestLogger" Version="3.0.114"/>
         <PackageVersion Include="Shouldly" Version="4.1.0"/>
 
-        <PackageVersion Include="Polly" Version="7.2.3"/>
+        <PackageVersion Include="Polly" Version="8.1.0"/>
 
         <PackageVersion Include="System.Net.Requests" Version="4.3.0"/>
         <PackageVersion Include="System.Text.Json" Version="7.0.0"/>
