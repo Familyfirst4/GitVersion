@@ -3,32 +3,20 @@ using GitVersion.Extensions;
 
 namespace GitVersion.VersionCalculation;
 
-public class NextVersion : IComparable<NextVersion>, IEquatable<NextVersion>
+public class NextVersion(SemanticVersion incrementedVersion, IBaseVersion baseVersion, EffectiveBranchConfiguration configuration)
+    : IComparable<NextVersion>, IEquatable<NextVersion>
 {
-    public BaseVersion BaseVersion { get; }
+    public IBaseVersion BaseVersion { get; } = baseVersion.NotNull();
 
-    public SemanticVersion IncrementedVersion { get; }
+    public SemanticVersion IncrementedVersion { get; } = incrementedVersion.NotNull();
 
-    public IBranch Branch { get; }
+    public EffectiveBranchConfiguration BranchConfiguration { get; } = configuration;
 
-    public EffectiveConfiguration Configuration { get; }
+    public EffectiveConfiguration Configuration => BranchConfiguration.Value;
 
-    public NextVersion(SemanticVersion incrementedVersion, BaseVersion baseVersion, EffectiveBranchConfiguration configuration)
-        : this(incrementedVersion, baseVersion, configuration.NotNull().Branch, configuration.NotNull().Value)
-    {
-    }
+    public int CompareTo(NextVersion? other) => IncrementedVersion.CompareTo(other?.IncrementedVersion);
 
-    public NextVersion(SemanticVersion incrementedVersion, BaseVersion baseVersion, IBranch branch, EffectiveConfiguration configuration)
-    {
-        IncrementedVersion = incrementedVersion.NotNull();
-        BaseVersion = baseVersion.NotNull();
-        Configuration = configuration.NotNull();
-        Branch = branch.NotNull();
-    }
-
-    public int CompareTo(NextVersion other) => IncrementedVersion.CompareTo(other.IncrementedVersion);
-
-    public static bool operator ==(NextVersion left, NextVersion right) => left.CompareTo(right) == 0;
+    public static bool operator ==(NextVersion left, NextVersion? right) => left.CompareTo(right) == 0;
 
     public static bool operator !=(NextVersion left, NextVersion right) => left.CompareTo(right) != 0;
 
@@ -40,9 +28,9 @@ public class NextVersion : IComparable<NextVersion>, IEquatable<NextVersion>
 
     public static bool operator >=(NextVersion left, NextVersion right) => left.CompareTo(right) >= 0;
 
-    public bool Equals(NextVersion other) => this == other;
+    public bool Equals(NextVersion? other) => this == other;
 
-    public override bool Equals(object other) => other is NextVersion nextVersion && Equals(nextVersion);
+    public override bool Equals(object? other) => other is NextVersion nextVersion && Equals(nextVersion);
 
     public override string ToString() => $"{BaseVersion} | {IncrementedVersion}";
 

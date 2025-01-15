@@ -1,41 +1,48 @@
 using GitVersion.Common;
 using GitVersion.Configuration;
+using GitVersion.Core;
 using GitVersion.Extensions;
 using Microsoft.Extensions.Options;
 
 namespace GitVersion;
 
-public class GitVersionContextFactory : IGitVersionContextFactory
+internal class GitVersionContextFactory(
+    IConfigurationProvider configurationProvider,
+    IRepositoryStore repositoryStore,
+    ITaggedSemanticVersionRepository taggedSemanticVersionRepository,
+    IOptions<GitVersionOptions> options)
+    : IGitVersionContextFactory
 {
-    private readonly IConfigurationProvider configurationProvider;
-    private readonly IRepositoryStore repositoryStore;
-    private readonly IOptions<GitVersionOptions> options;
-
-    public GitVersionContextFactory(IConfigurationProvider configurationProvider, IRepositoryStore repositoryStore, IOptions<GitVersionOptions> options)
-    {
-        this.configurationProvider = configurationProvider.NotNull();
-        this.repositoryStore = repositoryStore.NotNull();
-        this.options = options.NotNull();
-    }
+    private readonly IConfigurationProvider configurationProvider = configurationProvider.NotNull();
+    private readonly IRepositoryStore repositoryStore = repositoryStore.NotNull();
+    private readonly ITaggedSemanticVersionRepository taggedSemanticVersionRepository = taggedSemanticVersionRepository.NotNull();
+    private readonly IOptions<GitVersionOptions> options = options.NotNull();
 
     public GitVersionContext Create(GitVersionOptions gitVersionOptions)
     {
-        var currentBranch = this.repositoryStore.GetTargetBranch(gitVersionOptions.RepositoryInfo.TargetBranch);
-        if (currentBranch == null)
-            throw new InvalidOperationException("Need a branch to operate on");
+        var overrideConfiguration = this.options.Value.ConfigurationInfo.OverrideConfiguration;
+        var configuration = this.configurationProvider.Provide(overrideConfiguration);
 
-        var currentCommit = this.repositoryStore.GetCurrentCommit(currentBranch, gitVersionOptions.RepositoryInfo.CommitId);
-
-        var configuration = this.configurationProvider.Provide(this.options.Value.ConfigInfo.OverrideConfig);
+        var currentBranch = this.repositoryStore.GetTargetBranch(gitVersionOptions.RepositoryInfo.TargetBranch)
+            ?? throw new InvalidOperationException("Need a branch to operate on");
+        var currentCommit = this.repositoryStore.GetCurrentCommit(
+            currentBranch, gitVersionOptions.RepositoryInfo.CommitId, configuration.Ignore
+        ) ?? throw new GitVersionException("No commits found on the current branch.");
         if (currentBranch.IsDetachedHead)
         {
-            var branchForCommit = this.repositoryStore.GetBranchesContainingCommit(currentCommit, onlyTrackedBranches: gitVersionOptions.Settings.OnlyTrackedBranches).OnlyOrDefault();
+            var branchForCommit = this.repositoryStore.GetBranchesContainingCommit(
+                currentCommit, onlyTrackedBranches: gitVersionOptions.Settings.OnlyTrackedBranches
+            ).OnlyOrDefault();
             currentBranch = branchForCommit ?? currentBranch;
         }
 
-        var currentCommitTaggedVersion = this.repositoryStore.GetCurrentCommitTaggedVersion(currentCommit, configuration.TagPrefix);
-        var numberOfUncommittedChanges = this.repositoryStore.GetNumberOfUncommittedChanges();
+        bool isCurrentCommitTagged = this.taggedSemanticVersionRepository.GetTaggedSemanticVersions(
+            tagPrefix: configuration.TagPrefixPattern,
+            format: configuration.SemanticVersionFormat,
+            ignore: configuration.Ignore
+        ).Contains(currentCommit);
+        var numberOfUncommittedChanges = this.repositoryStore.UncommittedChangesCount;
 
-        return new GitVersionContext(currentBranch, currentCommit, configuration, currentCommitTaggedVersion, numberOfUncommittedChanges);
+        return new(currentBranch, currentCommit, configuration, isCurrentCommitTagged, numberOfUncommittedChanges);
     }
 }

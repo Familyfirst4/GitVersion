@@ -1,9 +1,6 @@
-using GitTools.Testing;
-using GitVersion.BuildAgents;
+using GitVersion.Agents;
+using GitVersion.Core.Tests;
 using GitVersion.Helpers;
-using GitVersion.OutputVariables;
-using NUnit.Framework;
-using Shouldly;
 
 namespace GitVersion.App.Tests;
 
@@ -37,7 +34,8 @@ public class JsonOutputOnBuildServerTest
         var result = GitVersionHelper.ExecuteIn(fixture.LocalRepositoryFixture.RepositoryPath, arguments: " /output json /output buildserver", environments: env);
 
         result.ExitCode.ShouldBe(0);
-        const string expectedVersion = "0.0.1+5";
+        const string expectedVersion = "0.0.1-5";
+        result.Output.ShouldNotBeNull();
         result.Output.ShouldContain($"##teamcity[buildNumber '{expectedVersion}']");
         result.OutputVariables.ShouldNotBeNull();
         result.OutputVariables.FullSemVer.ShouldBeEquivalentTo(expectedVersion);
@@ -56,7 +54,8 @@ public class JsonOutputOnBuildServerTest
         var result = GitVersionHelper.ExecuteIn(fixture.LocalRepositoryFixture.RepositoryPath, arguments: $" /output json /output buildserver /output file /outputfile {outputFile}", environments: env);
 
         result.ExitCode.ShouldBe(0);
-        const string expectedVersion = "0.0.1+5";
+        const string expectedVersion = "0.0.1-5";
+        result.Output.ShouldNotBeNull();
         result.Output.ShouldContain($"##teamcity[buildNumber '{expectedVersion}']");
         result.OutputVariables.ShouldNotBeNull();
         result.OutputVariables.FullSemVer.ShouldBeEquivalentTo(expectedVersion);
@@ -64,7 +63,7 @@ public class JsonOutputOnBuildServerTest
         var filePath = PathHelper.Combine(fixture.LocalRepositoryFixture.RepositoryPath, fileName);
         var json = File.ReadAllText(filePath);
 
-        var outputVariables = VersionVariables.FromJson(json);
+        var outputVariables = json.ToGitVersionVariables();
         outputVariables.ShouldNotBeNull();
         outputVariables.FullSemVer.ShouldBeEquivalentTo(expectedVersion);
     }

@@ -1,8 +1,6 @@
 using GitVersion.Core.Tests.Helpers;
 using GitVersion.Extensions;
 using Microsoft.Extensions.DependencyInjection;
-using NUnit.Framework;
-using Shouldly;
 
 namespace GitVersion.App.Tests;
 
@@ -22,7 +20,6 @@ public class HelpWriterTests : TestBase
         var lookup = new Dictionary<string, string>
         {
             { nameof(Arguments.TargetUrl), "/url" },
-            { nameof(Arguments.Init), "init" },
             { nameof(Arguments.TargetBranch), "/b" },
             { nameof(Arguments.LogFilePath) , "/l" },
             { nameof(Arguments.OutputFile) , "/outputfile" },
@@ -30,9 +27,13 @@ public class HelpWriterTests : TestBase
             { nameof(Arguments.IsHelp), "/?" },
             { nameof(Arguments.IsVersion), "/version" },
             { nameof(Arguments.UpdateWixVersionFile), "/updatewixversionfile" },
-            { nameof(Arguments.ConfigFile), "/config" },
+            { nameof(Arguments.ConfigurationFile), "/config" },
             { nameof(Arguments.Verbosity), "/verbosity" },
-            { nameof(Arguments.CommitId), "/c" }
+            { nameof(Arguments.CommitId), "/c" },
+            { nameof(Arguments.ShowConfiguration), "/showconfig" },
+            { nameof(Arguments.OverrideConfiguration), "/overrideconfig" },
+            { nameof(Arguments.ShowVariable), "/showvariable" },
+            { nameof(Arguments.Format), "/format" }
         };
         string helpText = string.Empty;
 
@@ -40,7 +41,8 @@ public class HelpWriterTests : TestBase
 
         var ignored = new[]
         {
-            nameof(Arguments.Authentication)
+            nameof(Arguments.Authentication),
+            nameof(Arguments.UpdateAssemblyInfoFileName)
         };
         typeof(Arguments).GetFields()
             .Select(p => p.Name)
@@ -51,8 +53,8 @@ public class HelpWriterTests : TestBase
 
     private static bool IsNotInHelp(IReadOnlyDictionary<string, string> lookup, string propertyName, string helpText)
     {
-        if (lookup.ContainsKey(propertyName))
-            return !helpText.Contains(lookup[propertyName]);
+        if (lookup.TryGetValue(propertyName, out var value))
+            return !helpText.Contains(value);
 
         return !helpText.Contains("/" + propertyName.ToLower());
     }

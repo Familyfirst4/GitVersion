@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <RootNamespace>Config</RootNamespace>
+        <PackageId>config</PackageId>
+    </PropertyGroup>
+    <ItemGroup>
+        <ProjectReference Include="..\common\common.csproj" />
+    </ItemGroup>
+    <ItemGroup>
+        <PackageReference Include="Cake.Json" />
+    </ItemGroup>
+</Project>

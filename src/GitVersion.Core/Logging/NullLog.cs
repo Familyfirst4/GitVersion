@@ -1,6 +1,8 @@
+using GitVersion.Helpers;
+
 namespace GitVersion.Logging;
 
-public sealed class NullLog : ILog
+internal sealed class NullLog : ILog
 {
     public Verbosity Verbosity { get; set; }
 
@@ -11,6 +13,10 @@ public sealed class NullLog : ILog
     public IDisposable IndentLog(string operationDescription) => Disposable.Empty;
 
     public void AddLogAppender(ILogAppender logAppender)
+    {
+    }
+
+    public void Separator()
     {
     }
 

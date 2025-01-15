@@ -1,7 +1,5 @@
 using GitVersion.Core.Tests.Helpers;
 using GitVersion.VersionCalculation;
-using NUnit.Framework;
-using Shouldly;
 
 namespace GitVersion.Core.Tests;
 
@@ -9,7 +7,7 @@ namespace GitVersion.Core.Tests;
 public class ShaVersionFilterTests : TestBase
 {
     [Test]
-    public void VerifyNullGuard2()
+    public void VerifyNullGuard()
     {
         var commit = GitToolsTestingExtensions.CreateMockCommit();
         var sut = new ShaVersionFilter(new[] { commit.Sha });
@@ -21,7 +19,7 @@ public class ShaVersionFilterTests : TestBase
     public void WhenShaMatchShouldExcludeWithReason()
     {
         var commit = GitToolsTestingExtensions.CreateMockCommit();
-        var version = new BaseVersion("dummy", false, new SemanticVersion(1), commit, string.Empty);
+        BaseVersion version = new("dummy", new SemanticVersion(1), commit);
         var sut = new ShaVersionFilter(new[] { commit.Sha });
 
         sut.Exclude(version, out var reason).ShouldBeTrue();
@@ -32,8 +30,8 @@ public class ShaVersionFilterTests : TestBase
     public void WhenShaMismatchShouldNotExclude()
     {
         var commit = GitToolsTestingExtensions.CreateMockCommit();
-        var version = new BaseVersion("dummy", false, new SemanticVersion(1), commit, string.Empty);
-        var sut = new ShaVersionFilter(new[] { "mismatched" });
+        BaseVersion version = new("dummy", new SemanticVersion(1), commit);
+        var sut = new ShaVersionFilter(["mismatched"]);
 
         sut.Exclude(version, out var reason).ShouldBeFalse();
         reason.ShouldBeNull();
@@ -42,8 +40,8 @@ public class ShaVersionFilterTests : TestBase
     [Test]
     public void ExcludeShouldAcceptVersionWithNullCommit()
     {
-        var version = new BaseVersion("dummy", false, new SemanticVersion(1), null, string.Empty);
-        var sut = new ShaVersionFilter(new[] { "mismatched" });
+        BaseVersion version = new("dummy", new SemanticVersion(1));
+        var sut = new ShaVersionFilter(["mismatched"]);
 
         sut.Exclude(version, out var reason).ShouldBeFalse();
         reason.ShouldBeNull();

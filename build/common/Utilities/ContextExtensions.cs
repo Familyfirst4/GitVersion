@@ -1,32 +1,12 @@
-using Cake.Common.Tools.DotNet.Test;
-using Common.Addins.Cake.Coverlet;
+using System.Runtime.InteropServices;
+using Cake.Common.Build.AzurePipelines;
 using Xunit;
-using CoverletSettings = Common.Addins.Cake.Coverlet.CoverletSettings;
+using ProcessArchitecture = System.Runtime.InteropServices.Architecture;
 
 namespace Common.Utilities;
 
 public static class ContextExtensions
 {
-    public static void DotNetTest(
-        this ICakeContext context,
-        FilePath project,
-        DotNetTestSettings settings,
-        CoverletSettings coverletSettings)
-    {
-        if (context == null)
-        {
-            throw new ArgumentNullException(nameof(context));
-        }
-        var currentCustomization = settings.ArgumentCustomization;
-        settings.ArgumentCustomization = (args) => ArgumentsProcessor.ProcessMsBuildArguments(
-            coverletSettings,
-            context.Environment,
-            currentCustomization?.Invoke(args) ?? args,
-            project);
-
-        context.DotNetTest(project.FullPath, settings);
-    }
-
     public static IEnumerable<string> ExecuteCommand(this ICakeContext context, FilePath exe, string? args, DirectoryPath? workDir = null)
     {
         var processSettings = new ProcessSettings { Arguments = args, RedirectStandardOutput = true };
@@ -34,6 +14,7 @@ public static class ContextExtensions
         {
             processSettings.WorkingDirectory = workDir;
         }
+
         context.StartProcess(exe, processSettings, out var redirectedOutput);
         return redirectedOutput.ToList();
     }
@@ -52,29 +33,14 @@ public static class ContextExtensions
 
     public static bool IsOriginalRepo(this ICakeContext context)
     {
-        var buildSystem = context.BuildSystem();
-        string repositoryName = string.Empty;
-        if (buildSystem.IsRunningOnAppVeyor)
-        {
-            repositoryName = buildSystem.AppVeyor.Environment.Repository.Name;
-        }
-        else if (buildSystem.IsRunningOnAzurePipelines)
-        {
-            repositoryName = buildSystem.AzurePipelines.Environment.Repository.RepoName;
-        }
-        else if (buildSystem.IsRunningOnGitHubActions)
-        {
-            repositoryName = buildSystem.GitHubActions.Environment.Workflow.Repository;
-        }
-        context.Information("Repository Name:   {0}", repositoryName);
-
+        var repositoryName = context.GetRepositoryName();
         return !string.IsNullOrWhiteSpace(repositoryName) && StringComparer.OrdinalIgnoreCase.Equals("gittools/GitVersion", repositoryName);
     }
 
     public static bool IsMainBranch(this ICakeContext context)
     {
         var repositoryBranch = GetBranchName(context);
-        return !string.IsNullOrWhiteSpace(repositoryBranch) && StringComparer.OrdinalIgnoreCase.Equals("main", repositoryBranch);
+        return !string.IsNullOrWhiteSpace(repositoryBranch) && StringComparer.OrdinalIgnoreCase.Equals(Constants.DefaultBranch, repositoryBranch);
     }
 
     public static bool IsSupportBranch(this ICakeContext context)
@@ -116,6 +82,12 @@ public static class ContextExtensions
         return string.Empty;
     }
 
+    public static bool IsRunningOnAmd64(this ICakeContext _)
+        => RuntimeInformation.ProcessArchitecture == ProcessArchitecture.X64;
+
+    public static bool IsRunningOnArm64(this ICakeContext _) =>
+        RuntimeInformation.ProcessArchitecture == ProcessArchitecture.Arm64;
+
     public static string GetBuildAgent(this ICakeContext context)
     {
         var buildSystem = context.BuildSystem();
@@ -132,30 +104,27 @@ public static class ContextExtensions
     public static void StartGroup(this ICakeContext context, string title)
     {
         var buildSystem = context.BuildSystem();
-        var startGroup = "[group]";
         if (buildSystem.IsRunningOnAzurePipelines)
         {
-            startGroup = "##[group]";
+            context.AzurePipelines().Commands.StartGroup(context, title);
         }
         else if (buildSystem.IsRunningOnGitHubActions)
         {
-            startGroup = "::group::";
+            context.GitHubActions().Commands.StartGroup(title);
         }
-        context.Information($"{startGroup}{title}");
     }
+
     public static void EndGroup(this ICakeContext context)
     {
         var buildSystem = context.BuildSystem();
-        var endgroup = "[endgroup]";
         if (buildSystem.IsRunningOnAzurePipelines)
         {
-            endgroup = "##[endgroup]";
+            context.AzurePipelines().Commands.EndGroup(context);
         }
         else if (buildSystem.IsRunningOnGitHubActions)
         {
-            endgroup = "::endgroup::";
+            context.GitHubActions().Commands.EndGroup();
         }
-        context.Information($"{endgroup}");
     }
 
     public static bool ShouldRun(this ICakeContext context, bool criteria, string skipMessage)
@@ -182,6 +151,39 @@ public static class ContextExtensions
         {
             repositoryBranch = buildSystem.GitHubActions.Environment.Workflow.Ref.Replace("refs/heads/", "");
         }
+
         return repositoryBranch;
     }
+
+    public static string GetRepositoryName(this ICakeContext context)
+    {
+        var buildSystem = context.BuildSystem();
+        string repositoryName = string.Empty;
+        if (buildSystem.IsRunningOnAppVeyor)
+        {
+            repositoryName = buildSystem.AppVeyor.Environment.Repository.Name;
+        }
+        else if (buildSystem.IsRunningOnAzurePipelines)
+        {
+            repositoryName = buildSystem.AzurePipelines.Environment.Repository.RepoName;
+        }
+        else if (buildSystem.IsRunningOnGitHubActions)
+        {
+            repositoryName = buildSystem.GitHubActions.Environment.Workflow.Repository;
+        }
+
+        return repositoryName;
+    }
+
+    private static void StartGroup(this IAzurePipelinesCommands _, ICakeContext context, string title) => context.Information("##[group]{0}", title);
+
+    private static void EndGroup(this IAzurePipelinesCommands _, ICakeContext context) => context.Information("##[endgroup]");
+
+    public static FilePath? GetGitVersionToolLocation(this ICakeContext context) =>
+        context.GetFiles($"src/GitVersion.App/bin/{Constants.DefaultConfiguration}/net{Constants.VersionLatest}/gitversion.dll").SingleOrDefault();
+    public static FilePath? GetGitVersionDotnetToolLocation(this ICakeContext context) =>
+        context.MakeAbsolute(Paths.Tools.Combine("gitversion").CombineWithFilePath("gitversion.dll"));
+
+    public static FilePath? GetSchemaDotnetToolLocation(this ICakeContext context) =>
+        context.MakeAbsolute(Paths.Tools.Combine("schema").CombineWithFilePath("schema.dll"));
 }

@@ -1,6 +1,5 @@
 using GitVersion.Core.Tests.Helpers;
-using NSubstitute;
-using NUnit.Framework;
+using GitVersion.Git;
 
 namespace GitVersion.Core.Tests;
 
@@ -35,14 +34,14 @@ public class RepositoryExtensionsTests : TestBase
 
         var branches = Substitute.For<IBranchCollection>();
         branches[branch.Name.Canonical].Returns(branch);
-        branches.GetEnumerator().Returns(_ => ((IEnumerable<IBranch>)new[] { branch }).GetEnumerator());
+        branches.MockCollectionReturn(branch);
 
         var reference = Substitute.For<IReference>();
         reference.Name.Returns(new ReferenceName("refs/heads/develop"));
 
         var references = Substitute.For<IReferenceCollection>();
         references["develop"].Returns(reference);
-        references.GetEnumerator().Returns(_ => ((IEnumerable<IReference>)new[] { reference }).GetEnumerator());
+        references.MockCollectionReturn(reference);
 
         repository.Refs.Returns(references);
         repository.Head.Returns(branch);

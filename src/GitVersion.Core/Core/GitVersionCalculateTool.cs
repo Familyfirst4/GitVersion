@@ -1,65 +1,62 @@
+using GitVersion.Configuration;
 using GitVersion.Extensions;
+using GitVersion.Helpers;
 using GitVersion.Logging;
 using GitVersion.OutputVariables;
 using GitVersion.VersionCalculation;
-using GitVersion.VersionCalculation.Cache;
+using GitVersion.VersionCalculation.Caching;
 using Microsoft.Extensions.Options;
 
 namespace GitVersion;
 
-public class GitVersionCalculateTool : IGitVersionCalculateTool
+internal class GitVersionCalculateTool(
+    ILog log,
+    INextVersionCalculator nextVersionCalculator,
+    IVariableProvider variableProvider,
+    IGitPreparer gitPreparer,
+    IGitVersionCacheProvider gitVersionCacheProvider,
+    IOptions<GitVersionOptions> options,
+    Lazy<GitVersionContext> versionContext)
+    : IGitVersionCalculateTool
 {
-    private readonly ILog log;
-    private readonly IGitVersionCache gitVersionCache;
-    private readonly INextVersionCalculator nextVersionCalculator;
-    private readonly IVariableProvider variableProvider;
-    private readonly IGitPreparer gitPreparer;
-    private readonly IGitVersionCacheKeyFactory cacheKeyFactory;
+    private readonly ILog log = log.NotNull();
+    private readonly IGitVersionCacheProvider gitVersionCacheProvider = gitVersionCacheProvider.NotNull();
+    private readonly INextVersionCalculator nextVersionCalculator = nextVersionCalculator.NotNull();
+    private readonly IVariableProvider variableProvider = variableProvider.NotNull();
+    private readonly IGitPreparer gitPreparer = gitPreparer.NotNull();
 
-    private readonly IOptions<GitVersionOptions> options;
-    private readonly Lazy<GitVersionContext> versionContext;
-    private GitVersionContext context => this.versionContext.Value;
+    private readonly IOptions<GitVersionOptions> options = options.NotNull();
+    private readonly Lazy<GitVersionContext> versionContext = versionContext.NotNull();
 
-    public GitVersionCalculateTool(ILog log, INextVersionCalculator nextVersionCalculator,
-        IVariableProvider variableProvider, IGitPreparer gitPreparer,
-        IGitVersionCache gitVersionCache, IGitVersionCacheKeyFactory cacheKeyFactory,
-        IOptions<GitVersionOptions> options, Lazy<GitVersionContext> versionContext)
-    {
-        this.log = log.NotNull();
+    private GitVersionContext Context => this.versionContext.Value;
 
-        this.nextVersionCalculator = nextVersionCalculator.NotNull();
-        this.variableProvider = variableProvider.NotNull();
-        this.gitPreparer = gitPreparer.NotNull();
-
-        this.cacheKeyFactory = cacheKeyFactory.NotNull();
-        this.gitVersionCache = gitVersionCache.NotNull();
-
-        this.options = options.NotNull();
-        this.versionContext = versionContext.NotNull();
-    }
-
-    public VersionVariables CalculateVersionVariables()
+    public GitVersionVariables CalculateVersionVariables()
     {
         this.gitPreparer.Prepare(); //we need to prepare the repository before using it for version calculation
 
         var gitVersionOptions = this.options.Value;
 
-        var cacheKey = this.cacheKeyFactory.Create(gitVersionOptions.ConfigInfo.OverrideConfig);
-        var versionVariables = gitVersionOptions.Settings.NoCache ? default : this.gitVersionCache.LoadVersionVariablesFromDiskCache(cacheKey);
+        var versionVariables = !gitVersionOptions.Settings.NoCache
+            ? this.gitVersionCacheProvider.LoadVersionVariablesFromDiskCache()
+            : default;
 
         if (versionVariables != null) return versionVariables;
 
-        var nextVersion = this.nextVersionCalculator.FindVersion();
-        versionVariables = this.variableProvider.GetVariablesFor(nextVersion.IncrementedVersion, nextVersion.Configuration, context.IsCurrentCommitTagged);
+        var semanticVersion = this.nextVersionCalculator.FindVersion();
+
+        var branchConfiguration = Context.Configuration.GetBranchConfiguration(Context.CurrentBranch);
+        EffectiveConfiguration effectiveConfiguration = new(Context.Configuration, branchConfiguration);
+        versionVariables = this.variableProvider.GetVariablesFor(
+            semanticVersion, Context.Configuration, effectiveConfiguration.PreReleaseWeight);
 
         if (gitVersionOptions.Settings.NoCache) return versionVariables;
         try
         {
-            this.gitVersionCache.WriteVariablesToDiskCache(cacheKey, versionVariables);
+            this.gitVersionCacheProvider.WriteVariablesToDiskCache(versionVariables);
         }
         catch (AggregateException e)
         {
-            this.log.Warning($"One or more exceptions during cache write:{System.Environment.NewLine}{e}");
+            this.log.Warning($"One or more exceptions during cache write:{PathHelper.NewLine}{e}");
         }
 
         return versionVariables;

@@ -1,5 +1,7 @@
 <Project>
     <PropertyGroup>
+        <TargetFrameworks>net8.0;net9.0</TargetFrameworks>
+
         <EndYear>$([System.DateTime]::Today.Year)</EndYear>
         <Authors>GitTools and Contributors</Authors>
         <Copyright>Copyright GitTools $(EndYear).</Copyright>
@@ -16,33 +18,47 @@
         <RepositoryUrl>https://github.com/GitTools/GitVersion</RepositoryUrl>
         <RepositoryType>git</RepositoryType>
 
-        <NoWarn>1591,8618</NoWarn>
+        <NoWarn>$(NoWarn);NU1701;1591,8618,SYSLIB10;EnableGenerateDocumentationFile</NoWarn>
+        <WarningsAsErrors>$(WarningsAsErrors);RS0016;RS0017;RS0022;RS0024;RS0025;RS0026;RS0027</WarningsAsErrors>
+
         <DebugType>embedded</DebugType>
-        <LangVersion>11</LangVersion>
+        <LangVersion>latest</LangVersion>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
+        <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
 
-        <EnableNETAnalyzers>True</EnableNETAnalyzers>
-        <!-- Latest = version of the analyzers included in latest installed SDK -->
+        <EnableNETAnalyzers>true</EnableNETAnalyzers>
         <AnalysisLevel>latest</AnalysisLevel>
-        <EnforceCodeStyleInBuild>True</EnforceCodeStyleInBuild>
+        <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
 
+        <IsUnitTestProject>false</IsUnitTestProject>
+        <DisableApiAnalyzers>false</DisableApiAnalyzers>
+        <IsUnitTestProject Condition="$(MSBuildProjectName.EndsWith('.Tests')) or $(MSBuildProjectName.EndsWith('.Testing'))">true</IsUnitTestProject>
     </PropertyGroup>
+
+    <PropertyGroup Condition="'$(GITHUB_ACTIONS)' == 'true'">
+        <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+    </PropertyGroup>
+
     <ItemGroup>
-        <PackageReference Include="System.Text.Json"/>
-        <PackageReference Include="System.Text.Encodings.Web"/>
+        <PackageReference Include="Roslynator.Analyzers">
+            <PrivateAssets>all</PrivateAssets>
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
+        <PackageReference Include="Roslynator.Formatting.Analyzers">
+            <PrivateAssets>all</PrivateAssets>
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
     </ItemGroup>
-    <ItemGroup Condition=" '$(IsTestProject)' == 'false' ">
+    <ItemGroup Condition=" '$(IsUnitTestProject)' == 'false' and $(MSBuildProjectName.EndsWith('.Schema')) == 'false' and '$(DisableApiAnalyzers)' == 'false'">
         <PackageReference Include="Microsoft.CodeAnalysis.PublicApiAnalyzers">
             <PrivateAssets>all</PrivateAssets>
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </PackageReference>
     </ItemGroup>
-    <ItemGroup Condition=" '$(IsTestProject)' == 'true' ">
-        <PackageReference Include="Microsoft.Extensions.DependencyInjection"/>
+    <ItemGroup Condition=" '$(IsUnitTestProject)' == 'true' ">
         <PackageReference Include="Microsoft.NET.Test.Sdk"/>
 
-        <PackageReference Include="JetBrains.Annotations"/>
         <PackageReference Include="NSubstitute"/>
 
         <PackageReference Include="NUnit"/>
@@ -54,9 +70,19 @@
             <PrivateAssets>all</PrivateAssets>
             <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
         </PackageReference>
+        <PackageReference Include="NUnit.Analyzers">
+            <PrivateAssets>all</PrivateAssets>
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
 
-        <ProjectReference Include="..\GitTools.Testing\GitTools.Testing.csproj"/>
+    </ItemGroup>
+    <ItemGroup Condition=" '$(IsUnitTestProject)' == 'true' and $(MSBuildProjectName.EndsWith('.Tests'))">
+        <ProjectReference Include="..\GitVersion.Testing\GitVersion.Testing.csproj"/>
 
+        <Using Include="GitVersion.Testing"/>
+        <Using Include="NSubstitute"/>
+        <Using Include="NUnit.Framework"/>
+        <Using Include="Shouldly"/>
     </ItemGroup>
 
     <ItemGroup>
@@ -65,7 +91,10 @@
         <Using Include="System.Diagnostics"/>
         <Using Include="System.Reflection"/>
         <Using Include="System.Text"/>
+        <Using Include="System.Text.Json"/>
+        <Using Include="System.Text.Json.Serialization"/>
         <Using Include="System.Xml"/>
+        <Using Include="System.Environment" Alias="SysEnv"/>
     </ItemGroup>
 
     <ItemGroup>

@@ -1,15 +1,15 @@
-using GitVersion.Configuration;
+using GitVersion.Git;
 using GitVersion.Logging;
 
 namespace GitVersion;
 
-public class Arguments
+internal class Arguments
 {
     public AuthenticationInfo Authentication = new();
 
-    public string? ConfigFile;
-    public GitVersionConfiguration? OverrideConfig;
-    public bool ShowConfig;
+    public string? ConfigurationFile;
+    public IReadOnlyDictionary<object, object?> OverrideConfiguration;
+    public bool ShowConfiguration;
 
     public string? TargetPath;
 
@@ -20,7 +20,6 @@ public class Arguments
     public string? CommitId;
     public string? ClonePath;
 
-    public bool Init;
     public bool Diag;
     public bool IsVersion;
     public bool IsHelp;
@@ -31,6 +30,7 @@ public class Arguments
 
     public string? LogFilePath;
     public string? ShowVariable;
+    public string? Format;
     public string? OutputFile;
     public ISet<OutputType> Output = new HashSet<OutputType>();
     public Verbosity Verbosity = Verbosity.Normal;
@@ -44,7 +44,7 @@ public class Arguments
     {
         var gitVersionOptions = new GitVersionOptions
         {
-            AssemblyInfo =
+            AssemblySettingsInfo =
             {
                 UpdateProjectFiles = UpdateProjectFiles,
                 UpdateAssemblyInfo = UpdateAssemblyInfo,
@@ -52,18 +52,18 @@ public class Arguments
                 Files = UpdateAssemblyInfoFileName
             },
 
-            Authentication =
+            AuthenticationInfo =
             {
                 Username = this.Authentication.Username,
                 Password = this.Authentication.Password,
                 Token = this.Authentication.Token
             },
 
-            ConfigInfo =
+            ConfigurationInfo =
             {
-                ConfigFile = ConfigFile,
-                OverrideConfig = OverrideConfig,
-                ShowConfig = ShowConfig
+                ConfigurationFile = ConfigurationFile,
+                OverrideConfiguration = OverrideConfiguration,
+                ShowConfiguration = ShowConfiguration
             },
 
             RepositoryInfo =
@@ -83,16 +83,16 @@ public class Arguments
 
             WixInfo =
             {
-                ShouldUpdate = UpdateWixVersionFile
+                UpdateWixVersionFile = UpdateWixVersionFile
             },
 
-            Init = Init,
             Diag = Diag,
             IsVersion = IsVersion,
             IsHelp = IsHelp,
 
             LogFilePath = LogFilePath,
             ShowVariable = ShowVariable,
+            Format = Format,
             Verbosity = Verbosity,
             Output = Output,
             OutputFile = OutputFile

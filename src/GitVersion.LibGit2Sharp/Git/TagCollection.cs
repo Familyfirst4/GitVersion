@@ -1,16 +1,19 @@
 using GitVersion.Extensions;
 
-namespace GitVersion;
+namespace GitVersion.Git;
 
 internal sealed class TagCollection : ITagCollection
 {
-    private readonly LibGit2Sharp.TagCollection innerCollection;
+    private readonly Lazy<IReadOnlyCollection<ITag>> tags;
 
     internal TagCollection(LibGit2Sharp.TagCollection collection)
-        => this.innerCollection = collection.NotNull();
+    {
+        collection = collection.NotNull();
+        this.tags = new Lazy<IReadOnlyCollection<ITag>>(() => collection.Select(tag => new Tag(tag)).ToArray());
+    }
 
     public IEnumerator<ITag> GetEnumerator()
-        => this.innerCollection.Select(tag => new Tag(tag)).GetEnumerator();
+        => this.tags.Value.GetEnumerator();
 
     IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 }

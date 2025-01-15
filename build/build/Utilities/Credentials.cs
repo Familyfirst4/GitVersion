@@ -4,10 +4,10 @@ namespace Build.Utilities;
 
 public class Credentials
 {
-    public CodeCovCredentials? CodeCov { get; private set; }
+    public CodeCovCredentials? CodeCov { get; private init; }
 
     public static Credentials GetCredentials(ICakeContext context) => new()
     {
-        CodeCov = new CodeCovCredentials(context.EnvironmentVariable("CODECOV_TOKEN")),
+        CodeCov = new(context.EnvironmentVariable("CODECOV_TOKEN")),
     };
 }

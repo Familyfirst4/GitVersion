@@ -1,5 +1,5 @@
 #!/usr/bin/sh
-# sh /scripts/test-native-tool.sh --version 5.7.1-beta1-56 --runtime linux-musl-x64 /nuget --repoPath /repo
+# sh /scripts/test-native-tool.sh --version 6.0.0 --runtime linux-musl-x64 /nuget --repoPath /repo
 while test "$#" -gt 0
 do
     case $1 in
@@ -16,11 +16,12 @@ do
     shift
 done
 
+git config --global --add safe.directory '*'
 result=$(tar -xvpf /native/gitversion-$runtime-$version.tar.gz -C /native) # >/dev/null
 status=$?
 if test $status -eq 0
 then
-    /native/gitversion $repoPath /showvariable FullSemver;
+    /native/gitversion $repoPath /showvariable FullSemver /nocache
 else
     echo $result
 fi

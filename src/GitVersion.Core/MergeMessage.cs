@@ -1,92 +1,98 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Text.RegularExpressions;
 using GitVersion.Configuration;
+using GitVersion.Core;
+using GitVersion.Extensions;
+using GitVersion.Git;
 
 namespace GitVersion;
 
 public class MergeMessage
 {
-    private static readonly IList<MergeMessageFormat> DefaultFormats = new List<MergeMessageFormat>
-    {
-        new("Default", @"^Merge (branch|tag) '(?<SourceBranch>[^']*)'(?: into (?<TargetBranch>[^\s]*))*"),
-        new("SmartGit",  @"^Finish (?<SourceBranch>[^\s]*)(?: into (?<TargetBranch>[^\s]*))*"),
-        new("BitBucketPull", @"^Merge pull request #(?<PullRequestNumber>\d+) (from|in) (?<Source>.*) from (?<SourceBranch>[^\s]*) to (?<TargetBranch>[^\s]*)"),
-        new("BitBucketPullv7", @"^Pull request #(?<PullRequestNumber>\d+).*\r?\n\r?\nMerge in (?<Source>.*) from (?<SourceBranch>[^\s]*) to (?<TargetBranch>[^\s]*)"),
-        new("GitHubPull", @"^Merge pull request #(?<PullRequestNumber>\d+) (from|in) (?:(?<SourceBranch>[^\s]*))(?: into (?<TargetBranch>[^\s]*))*"),
-        new("RemoteTracking", @"^Merge remote-tracking branch '(?<SourceBranch>[^\s]*)'(?: into (?<TargetBranch>[^\s]*))*")
-    };
+    private static readonly IList<(string Name, Regex Pattern)> DefaultFormats =
+    [
+        new("Default", RegexPatterns.MergeMessage.DefaultMergeMessageRegex),
+        new("SmartGit", RegexPatterns.MergeMessage.SmartGitMergeMessageRegex),
+        new("BitBucketPull", RegexPatterns.MergeMessage.BitBucketPullMergeMessageRegex),
+        new("BitBucketPullv7", RegexPatterns.MergeMessage.BitBucketPullv7MergeMessageRegex),
+        new("BitBucketCloudPull", RegexPatterns.MergeMessage.BitBucketCloudPullMergeMessageRegex),
+        new("GitHubPull", RegexPatterns.MergeMessage.GitHubPullMergeMessageRegex),
+        new("RemoteTracking", RegexPatterns.MergeMessage.RemoteTrackingMergeMessageRegex),
+        new("AzureDevOpsPull", RegexPatterns.MergeMessage.AzureDevOpsPullMergeMessageRegex)
+    ];
 
-    public MergeMessage(string? mergeMessage, GitVersionConfiguration configuration)
+    public MergeMessage(string mergeMessage, IGitVersionConfiguration configuration)
     {
-        if (mergeMessage == null)
-            throw new NullReferenceException();
+        mergeMessage.NotNull();
+
+        if (mergeMessage.Length == 0) return;
 
         // Concatenate configuration formats with the defaults.
         // Ensure configurations are processed first.
         var allFormats = configuration.MergeMessageFormats
-            .Select(x => new MergeMessageFormat(x.Key, x.Value))
+            .Select(x => (Name: x.Key, Pattern: RegexPatterns.Cache.GetOrAdd(x.Value)))
             .Concat(DefaultFormats);
 
-        foreach (var format in allFormats)
+        foreach (var (Name, Pattern) in allFormats)
         {
-            var match = format.Pattern.Match(mergeMessage);
-            if (match.Success)
+            var match = Pattern.Match(mergeMessage);
+            if (!match.Success)
+                continue;
+
+            FormatName = Name;
+            var sourceBranch = match.Groups["SourceBranch"].Value;
+            MergedBranch = GetMergedBranchName(sourceBranch);
+
+            if (match.Groups["TargetBranch"].Success)
             {
-                FormatName = format.Name;
-                MergedBranch = match.Groups["SourceBranch"].Value;
-
-                if (match.Groups["TargetBranch"].Success)
-                {
-                    TargetBranch = match.Groups["TargetBranch"].Value;
-                }
-
-                if (int.TryParse(match.Groups["PullRequestNumber"].Value, out var pullNumber))
-                {
-                    PullRequestNumber = pullNumber;
-                }
-
-                Version = ParseVersion(configuration.TagPrefix);
-
-                break;
+                TargetBranch = match.Groups["TargetBranch"].Value;
             }
+
+            if (int.TryParse(match.Groups["PullRequestNumber"].Value, out var pullNumber))
+            {
+                PullRequestNumber = pullNumber;
+            }
+
+            Version = MergedBranch?.TryGetSemanticVersion(out var result, configuration) == true ? result.Value : null;
+
+            break;
         }
     }
 
     public string? FormatName { get; }
     public string? TargetBranch { get; }
-    public string MergedBranch { get; } = "";
+    public ReferenceName? MergedBranch { get; }
+
     public bool IsMergedPullRequest => PullRequestNumber != null;
     public int? PullRequestNumber { get; }
     public SemanticVersion? Version { get; }
 
-    private SemanticVersion? ParseVersion(string? tagPrefix)
+    private ReferenceName GetMergedBranchName(string mergedBranch)
     {
-        if (tagPrefix is null)
-            return null;
-        // Remove remotes and branch prefixes like release/ feature/ hotfix/ etc
-        var toMatch = Regex.Replace(MergedBranch, @"^(\w+[-/])*", "", RegexOptions.IgnoreCase);
-        toMatch = Regex.Replace(toMatch, $"^{tagPrefix}", "");
-        // We don't match if the version is likely an ip (i.e starts with http://)
-        var versionMatch = new Regex(@"^(?<!://)\d+\.\d+(\.*\d+)*");
-        var version = versionMatch.Match(toMatch);
-
-        if (version.Success && SemanticVersion.TryParse(version.Value, tagPrefix, out var val))
+        if (FormatName == "RemoteTracking" && !mergedBranch.StartsWith(ReferenceName.RemoteTrackingBranchPrefix))
         {
-            return val;
+            mergedBranch = $"{ReferenceName.RemoteTrackingBranchPrefix}{mergedBranch}";
         }
-
-        return null;
+        return ReferenceName.FromBranchName(mergedBranch);
     }
 
-    private class MergeMessageFormat
+    public static bool TryParse(
+        ICommit mergeCommit, IGitVersionConfiguration configuration, [NotNullWhen(true)] out MergeMessage? mergeMessage)
     {
-        public MergeMessageFormat(string name, string pattern)
+        mergeCommit.NotNull();
+        configuration.NotNull();
+
+        mergeMessage = null;
+
+        var mergedBranch = new MergeMessage(mergeCommit.Message, configuration).MergedBranch;
+        var isReleaseBranch = mergedBranch is not null && configuration.IsReleaseBranch(mergedBranch);
+        var isValidMergeCommit = mergeCommit.IsMergeCommit() || isReleaseBranch;
+
+        if (isValidMergeCommit)
         {
-            Name = name;
-            Pattern = new Regex(pattern, RegexOptions.IgnoreCase | RegexOptions.Compiled);
+            mergeMessage = new MergeMessage(mergeCommit.Message, configuration);
         }
 
-        public string Name { get; }
-
-        public Regex Pattern { get; }
+        return isValidMergeCommit;
     }
 }

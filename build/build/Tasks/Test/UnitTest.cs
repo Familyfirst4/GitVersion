@@ -3,13 +3,12 @@ using Cake.Common.Tools.DotNet.Test;
 using Cake.Coverlet;
 using Cake.Incubator.LoggingExtensions;
 using Common.Utilities;
-using CoverletSettings = Common.Addins.Cake.Coverlet.CoverletSettings;
 
 namespace Build.Tasks;
 
 [TaskName(nameof(UnitTest))]
 [TaskDescription("Run the unit tests")]
-[TaskArgument(Arguments.DotnetTarget, Constants.NetVersion60, Constants.NetVersion70)]
+[DotnetArgument]
 [IsDependentOn(typeof(Build))]
 public class UnitTest : FrostingTask<BuildContext>
 {
@@ -17,15 +16,15 @@ public class UnitTest : FrostingTask<BuildContext>
 
     public override void Run(BuildContext context)
     {
-        var dotnetTarget = context.Argument(Arguments.DotnetTarget, string.Empty);
-        var frameworks = new[] { Constants.NetVersion60, Constants.NetVersion70 };
-        if (!string.IsNullOrWhiteSpace(dotnetTarget))
+        var dotnetVersion = context.Argument(Arguments.DotnetVersion, string.Empty);
+        var frameworks = Constants.DotnetVersions;
+        if (!string.IsNullOrWhiteSpace(dotnetVersion))
         {
-            if (!frameworks.Contains(dotnetTarget, StringComparer.OrdinalIgnoreCase))
+            if (!frameworks.Contains(dotnetVersion, StringComparer.OrdinalIgnoreCase))
             {
-                throw new Exception($"Dotnet Target {dotnetTarget} is not supported at the moment");
+                throw new Exception($"Dotnet Target {dotnetVersion} is not supported at the moment");
             }
-            frameworks = new[] { dotnetTarget };
+            frameworks = [dotnetVersion];
         }
 
         foreach (var framework in frameworks)
@@ -49,12 +48,12 @@ public class UnitTest : FrostingTask<BuildContext>
     public override void Finally(BuildContext context)
     {
         var testResultsFiles = context.GetFiles($"{Paths.TestOutput}/*.results.xml");
-        if (!context.IsAzurePipelineBuild || !testResultsFiles.Any()) return;
+        if (!context.IsAzurePipelineBuild || testResultsFiles.Count == 0) return;
 
         var data = new AzurePipelinesPublishTestResultsData
         {
             TestResultsFiles = testResultsFiles.ToArray(),
-            Platform = context.Environment.Platform.Family.ToString(),
+            Platform = context.Platform.ToString(),
             TestRunner = AzurePipelinesTestRunnerType.JUnit
         };
         context.BuildSystem().AzurePipelines.Commands.PublishTestResults(data);
@@ -63,18 +62,18 @@ public class UnitTest : FrostingTask<BuildContext>
     private static void TestProjectForTarget(BuildContext context, FilePath project, string framework)
     {
         var testResultsPath = Paths.TestOutput;
-        var projectName = $"{project.GetFilenameWithoutExtension()}.{framework}";
+        var projectName = $"{project.GetFilenameWithoutExtension()}.net{framework}";
         var settings = new DotNetTestSettings
         {
-            Framework = framework,
+            Framework = $"net{framework}",
             NoBuild = true,
             NoRestore = true,
             Configuration = context.MsBuildConfiguration,
-            TestAdapterPath = new DirectoryPath(".")
+            TestAdapterPath = new(".")
         };
 
         var resultsPath = context.MakeAbsolute(testResultsPath.CombineWithFilePath($"{projectName}.results.xml"));
-        settings.Loggers = new[] { $"junit;LogFilePath={resultsPath}" };
+        settings.Loggers = [$"junit;LogFilePath={resultsPath}"];
 
         var coverletSettings = new CoverletSettings
         {
@@ -82,7 +81,7 @@ public class UnitTest : FrostingTask<BuildContext>
             CoverletOutputFormat = CoverletOutputFormat.cobertura,
             CoverletOutputDirectory = testResultsPath,
             CoverletOutputName = $"{projectName}.coverage.xml",
-            Exclude = new List<string> { "[GitVersion*.Tests]*", "[GitTools.Testing]*" }
+            Exclude = ["[GitVersion*.Tests]*", "[GitTools.Testing]*"]
         };
 
         context.DotNetTest(project.FullPath, settings, coverletSettings);

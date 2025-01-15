@@ -1,11 +1,8 @@
 using GitVersion.Common;
 using GitVersion.Configuration;
-using GitVersion.Core.Tests.Helpers;
+using GitVersion.Git;
 using GitVersion.Logging;
 using GitVersion.VersionCalculation;
-using NSubstitute;
-using NUnit.Framework;
-using Shouldly;
 
 namespace GitVersion.Core.Tests.VersionCalculation;
 
@@ -13,17 +10,17 @@ namespace GitVersion.Core.Tests.VersionCalculation;
 public class EffectiveBranchConfigurationFinderTests
 {
     [Theory]
-    public void When_getting_configurations_of_a_branch_without_versioning_mode_Given_fallback_configuaration_with_versioning_mode_Then_result_should_have_versioning_mode(
-        VersioningMode versioningMode)
+    public void When_getting_configurations_of_a_branch_without_versioning_mode_Given_fallback_configuration_with_versioning_mode_Then_result_should_have_versioning_mode(
+        DeploymentMode versioningMode)
     {
         // Arrange
         var branchMock = GitToolsTestingExtensions.CreateMockBranch("main", GitToolsTestingExtensions.CreateMockCommit());
         var configuration = GitFlowConfigurationBuilder.New
-            .WithVersioningMode(versioningMode)
-            .WithBranch("main", builder => builder.WithVersioningMode(null))
+            .WithDeploymentMode(versioningMode)
+            .WithBranch("main", builder => builder.WithDeploymentMode(null))
             .Build();
         var repositoryStoreMock = Substitute.For<IRepositoryStore>();
-        repositoryStoreMock.GetSourceBranches(branchMock, configuration, Arg.Any<HashSet<IBranch>>()).Returns(Enumerable.Empty<IBranch>());
+        repositoryStoreMock.GetSourceBranches(branchMock, configuration, Arg.Any<HashSet<IBranch>>()).Returns([]);
 
         var unitUnderTest = new EffectiveBranchConfigurationFinder(Substitute.For<ILog>(), repositoryStoreMock);
 
@@ -33,22 +30,20 @@ public class EffectiveBranchConfigurationFinderTests
         // Assert
         actual.ShouldHaveSingleItem();
         actual[0].Branch.ShouldBe(branchMock);
-        actual[0].Value.VersioningMode.ShouldBe(versioningMode);
+        actual[0].Value.DeploymentMode.ShouldBe(versioningMode);
     }
 
     [Theory]
-    public void When_getting_configurations_of_a_branch_with_versioning_mode_Given_fallback_configuaration_without_versioning_mode_Then_result_should_have_versioning_mode(
-        VersioningMode versioningMode)
+    public void When_getting_configurations_of_a_branch_with_versioning_mode_Given_fallback_configuration_without_versioning_mode_Then_result_should_have_versioning_mode(
+        DeploymentMode versioningMode)
     {
         // Arrange
         var mainBranchMock = GitToolsTestingExtensions.CreateMockBranch("main", GitToolsTestingExtensions.CreateMockCommit());
         var developBranchMock = GitToolsTestingExtensions.CreateMockBranch("develop", GitToolsTestingExtensions.CreateMockCommit());
         var configuration = GitFlowConfigurationBuilder.New
-            .WithoutVersioningMode()
-            .WithBranch("main", builder => builder.WithVersioningMode(versioningMode))
-            .WithBranch("develop", builder => builder
-                .WithVersioningMode(null).WithIncrement(IncrementStrategy.Inherit)
-            )
+            .WithDeploymentMode(null)
+            .WithBranch("main", builder => builder.WithDeploymentMode(versioningMode))
+            .WithBranch("develop", builder => builder.WithDeploymentMode(null).WithIncrement(IncrementStrategy.Inherit))
             .Build();
         var repositoryStoreMock = Substitute.For<IRepositoryStore>();
         repositoryStoreMock.GetSourceBranches(developBranchMock, configuration, Arg.Any<HashSet<IBranch>>()).Returns(new[] { mainBranchMock });
@@ -61,20 +56,21 @@ public class EffectiveBranchConfigurationFinderTests
         // Assert
         actual.ShouldHaveSingleItem();
         actual[0].Branch.ShouldBe(mainBranchMock);
-        actual[0].Value.VersioningMode.ShouldBe(versioningMode);
+        actual[0].Value.DeploymentMode.ShouldBe(versioningMode);
     }
 
     [Theory]
-    public void When_getting_configurations_of_a_branch_with_versioning_mode_Given_parent_configuaration_with_versioning_mode_Then_result_should_not_have_versioning_mode_of_parent(
-        VersioningMode versioningMode)
+    public void When_getting_configurations_of_a_branch_with_versioning_mode_Given_parent_configuration_with_versioning_mode_Then_result_should_not_have_versioning_mode_of_parent(
+        DeploymentMode versioningMode)
     {
         // Arrange
         var mainBranchMock = GitToolsTestingExtensions.CreateMockBranch("main", GitToolsTestingExtensions.CreateMockCommit());
         var developBranchMock = GitToolsTestingExtensions.CreateMockBranch("develop", GitToolsTestingExtensions.CreateMockCommit());
-        var configuration = GitFlowConfigurationBuilder.New.WithoutVersioningMode()
-            .WithBranch("main", builder => builder.WithVersioningMode(versioningMode))
+        var configuration = GitFlowConfigurationBuilder.New
+            .WithDeploymentMode(null)
+            .WithBranch("main", builder => builder.WithDeploymentMode(versioningMode))
             .WithBranch("develop", builder => builder
-                .WithVersioningMode(VersioningMode.ContinuousDelivery).WithIncrement(IncrementStrategy.Inherit)
+                .WithDeploymentMode(DeploymentMode.ContinuousDelivery).WithIncrement(IncrementStrategy.Inherit)
             )
             .Build();
 
@@ -89,13 +85,13 @@ public class EffectiveBranchConfigurationFinderTests
         // Assert
         actual.ShouldHaveSingleItem();
         actual[0].Branch.ShouldBe(mainBranchMock);
-        if (versioningMode == VersioningMode.ContinuousDelivery)
+        if (versioningMode == DeploymentMode.ContinuousDelivery)
         {
-            actual[0].Value.VersioningMode.ShouldBe(versioningMode);
+            actual[0].Value.DeploymentMode.ShouldBe(versioningMode);
         }
         else
         {
-            actual[0].Value.VersioningMode.ShouldNotBe(versioningMode);
+            actual[0].Value.DeploymentMode.ShouldNotBe(versioningMode);
         }
     }
 
@@ -106,9 +102,9 @@ public class EffectiveBranchConfigurationFinderTests
         var mainBranchMock = GitToolsTestingExtensions.CreateMockBranch("main", GitToolsTestingExtensions.CreateMockCommit());
         var developBranchMock = GitToolsTestingExtensions.CreateMockBranch("develop", GitToolsTestingExtensions.CreateMockCommit());
         var configuration = GitFlowConfigurationBuilder.New
-            .WithBranch("main", builder => builder.WithTag(string.Empty))
+            .WithBranch("main", builder => builder.WithLabel(string.Empty))
             .WithBranch("develop", builder => builder
-                .WithIncrement(IncrementStrategy.Inherit).WithTag("alpha")
+                .WithIncrement(IncrementStrategy.Inherit).WithLabel("alpha")
             )
             .Build();
 
@@ -120,11 +116,10 @@ public class EffectiveBranchConfigurationFinderTests
         // Act
         var actual = unitUnderTest.GetConfigurations(developBranchMock, configuration).ToArray();
 
-
         // Assert
         actual.ShouldHaveSingleItem();
         actual[0].Branch.ShouldBe(mainBranchMock);
-        actual[0].Value.Tag.ShouldBe("alpha");
+        actual[0].Value.Label.ShouldBe("alpha");
     }
 
     [Test]
@@ -134,9 +129,9 @@ public class EffectiveBranchConfigurationFinderTests
         var mainBranchMock = GitToolsTestingExtensions.CreateMockBranch("main", GitToolsTestingExtensions.CreateMockCommit());
         var developBranchMock = GitToolsTestingExtensions.CreateMockBranch("develop", GitToolsTestingExtensions.CreateMockCommit());
         var configuration = GitFlowConfigurationBuilder.New
-            .WithBranch("main", builder => builder.WithTag(string.Empty))
+            .WithBranch("main", builder => builder.WithLabel(string.Empty))
             .WithBranch("develop", builder => builder
-                .WithIncrement(IncrementStrategy.Inherit).WithTag(null)
+                .WithIncrement(IncrementStrategy.Inherit).WithLabel(null)
             )
             .Build();
 
@@ -151,37 +146,31 @@ public class EffectiveBranchConfigurationFinderTests
         // Assert
         actual.ShouldHaveSingleItem();
         actual[0].Branch.ShouldBe(mainBranchMock);
-        actual[0].Value.Tag.ShouldBe(string.Empty);
+        actual[0].Value.Label.ShouldBe(string.Empty);
     }
 
     [TestCase("release/latest", IncrementStrategy.None, "latest")]
     [TestCase("release/1.0.0", IncrementStrategy.Patch, "not-latest")]
-    public void UsesFirstBranchConfigWhenMultipleMatch(string branchName, IncrementStrategy incrementStrategy, string tag)
+    public void UsesFirstBranchConfigWhenMultipleMatch(string branchName, IncrementStrategy incrementStrategy, string label)
     {
         // Arrange
         var releaseBranchMock = GitToolsTestingExtensions.CreateMockBranch(branchName, GitToolsTestingExtensions.CreateMockCommit());
-        var branchConfiguration = new BranchConfiguration
-        {
-            VersioningMode = VersioningMode.Mainline,
-            Increment = IncrementStrategy.None,
-            PreventIncrementOfMergedBranchVersion = false,
-            TrackMergeTarget = false,
-            TracksReleaseBranches = false,
-            IsReleaseBranch = false,
-            SourceBranches = new HashSet<string>()
-        };
-        var configuration = new ConfigurationBuilder().Add(new GitVersionConfiguration
-        {
-            VersioningMode = VersioningMode.ContinuousDelivery,
-            Branches =
-            {
-                { "release/latest", new BranchConfiguration(branchConfiguration) { Increment = IncrementStrategy.None, Tag = "latest", Regex = "release/latest" } },
-                { "release", new BranchConfiguration(branchConfiguration) { Increment = IncrementStrategy.Patch, Tag = "not-latest", Regex = "releases?[/-]" } }
-            }
-        }).Build();
+        var configuration = GitFlowConfigurationBuilder.New
+            .WithoutBranches()
+            .WithBranch("release/latest", builder => builder
+                .WithIncrement(IncrementStrategy.None)
+                .WithLabel("latest")
+                .WithRegularExpression("release/latest")
+            )
+            .WithBranch("release", builder => builder
+                .WithIncrement(IncrementStrategy.Patch)
+                .WithLabel("not-latest")
+                .WithRegularExpression("releases?[/-]")
+            )
+            .Build();
 
         var repositoryStoreMock = Substitute.For<IRepositoryStore>();
-        repositoryStoreMock.GetSourceBranches(releaseBranchMock, configuration, Arg.Any<HashSet<IBranch>>()).Returns(Enumerable.Empty<IBranch>());
+        repositoryStoreMock.GetSourceBranches(releaseBranchMock, configuration, Arg.Any<HashSet<IBranch>>()).Returns([]);
 
         var unitUnderTest = new EffectiveBranchConfigurationFinder(Substitute.For<ILog>(), repositoryStoreMock);
 
@@ -192,32 +181,11 @@ public class EffectiveBranchConfigurationFinderTests
         actual.ShouldHaveSingleItem();
         actual[0].Branch.ShouldBe(releaseBranchMock);
         actual[0].Value.Increment.ShouldBe(incrementStrategy);
-        actual[0].Value.Tag.ShouldBe(tag);
+        actual[0].Value.Label.ShouldBe(label);
     }
 
     [Test]
-    public void When_getting_configurations_of_an_orphaned_branch_Given_fallback_configuaration_without_increment_Then_result_should_be_empty()
-    {
-        // Arrange
-        var branchMock = GitToolsTestingExtensions.CreateMockBranch("develop", GitToolsTestingExtensions.CreateMockCommit());
-        var configuration = GitFlowConfigurationBuilder.New
-            .WithIncrement(null)
-            .WithBranch("develop", builder => builder.WithIncrement(IncrementStrategy.Inherit))
-            .Build();
-        var repositoryStoreMock = Substitute.For<IRepositoryStore>();
-        repositoryStoreMock.GetSourceBranches(branchMock, configuration, Arg.Any<HashSet<IBranch>>()).Returns(Enumerable.Empty<IBranch>());
-
-        var unitUnderTest = new EffectiveBranchConfigurationFinder(Substitute.For<ILog>(), repositoryStoreMock);
-
-        // Act
-        var actual = unitUnderTest.GetConfigurations(branchMock, configuration).ToArray();
-
-        // Assert
-        actual.ShouldBeEmpty();
-    }
-
-    [Test]
-    public void When_getting_configurations_of_an_orphaned_branch_Given_fallback_configuration_with_increment_inherit_Then_result_should_have_increment_none()
+    public void When_getting_configurations_of_an_orphaned_branch_Given_fallback_configuration_with_increment_inherit_Then_result_should_be_empty()
     {
         // Arrange
         var branchMock = GitToolsTestingExtensions.CreateMockBranch("develop", GitToolsTestingExtensions.CreateMockCommit());
@@ -226,7 +194,7 @@ public class EffectiveBranchConfigurationFinderTests
             .WithBranch("develop", builder => builder.WithIncrement(IncrementStrategy.Inherit))
             .Build();
         var repositoryStoreMock = Substitute.For<IRepositoryStore>();
-        repositoryStoreMock.GetSourceBranches(branchMock, configuration, Arg.Any<HashSet<IBranch>>()).Returns(Enumerable.Empty<IBranch>());
+        repositoryStoreMock.GetSourceBranches(branchMock, configuration, Arg.Any<HashSet<IBranch>>()).Returns([]);
 
         var unitUnderTest = new EffectiveBranchConfigurationFinder(Substitute.For<ILog>(), repositoryStoreMock);
 
@@ -234,9 +202,7 @@ public class EffectiveBranchConfigurationFinderTests
         var actual = unitUnderTest.GetConfigurations(branchMock, configuration).ToArray();
 
         // Assert
-        actual.ShouldHaveSingleItem();
-        actual[0].Branch.ShouldBe(branchMock);
-        actual[0].Value.Increment.ShouldBe(IncrementStrategy.None);
+        actual.ShouldBeEmpty();
     }
 
     [TestCase(IncrementStrategy.None)]
@@ -253,7 +219,7 @@ public class EffectiveBranchConfigurationFinderTests
             .WithBranch("develop", builder => builder.WithIncrement(IncrementStrategy.Inherit))
             .Build();
         var repositoryStoreMock = Substitute.For<IRepositoryStore>();
-        repositoryStoreMock.GetSourceBranches(branchMock, configuration, Arg.Any<HashSet<IBranch>>()).Returns(Enumerable.Empty<IBranch>());
+        repositoryStoreMock.GetSourceBranches(branchMock, configuration, Arg.Any<HashSet<IBranch>>()).Returns([]);
 
         var unitUnderTest = new EffectiveBranchConfigurationFinder(Substitute.For<ILog>(), repositoryStoreMock);
 
@@ -267,13 +233,16 @@ public class EffectiveBranchConfigurationFinderTests
     }
 
     [Test]
-    public void When_getting_configurations_of_an_unknown_branch_Given_fallback_configuaration_without_increment_and_unknown_configuration_with_increment_inherit_Then_result_should_be_empty()
+    public void When_getting_configurations_of_an_unknown_branch_Given_fallback_and_unknown_configuration_with_increment_inherit_Then_result_should_be_empty()
     {
         // Arrange
         var branchMock = GitToolsTestingExtensions.CreateMockBranch("unknown", GitToolsTestingExtensions.CreateMockCommit());
-        var configuration = GitFlowConfigurationBuilder.New.WithIncrement(null).Build();
+        var configuration = GitFlowConfigurationBuilder.New
+            .WithIncrement(IncrementStrategy.Inherit)
+            .WithBranch("unknown", builder => builder.WithIncrement(IncrementStrategy.Inherit))
+            .Build();
         var repositoryStoreMock = Substitute.For<IRepositoryStore>();
-        repositoryStoreMock.GetSourceBranches(branchMock, configuration, Arg.Any<HashSet<IBranch>>()).Returns(Enumerable.Empty<IBranch>());
+        repositoryStoreMock.GetSourceBranches(branchMock, configuration, Arg.Any<HashSet<IBranch>>()).Returns([]);
 
         var unitUnderTest = new EffectiveBranchConfigurationFinder(Substitute.For<ILog>(), repositoryStoreMock);
 
@@ -288,14 +257,17 @@ public class EffectiveBranchConfigurationFinderTests
     [TestCase(IncrementStrategy.Patch)]
     [TestCase(IncrementStrategy.Minor)]
     [TestCase(IncrementStrategy.Major)]
-    public void When_getting_configurations_of_an_unknown_branch_Given_fallback_configuaration_with_increment_and_unknown_configuration_with_increment_inherit_Then_result_should_have_fallback_increment(
+    public void When_getting_configurations_of_an_unknown_branch_Given_fallback_configuration_with_increment_and_unknown_configuration_with_increment_inherit_Then_result_should_have_fallback_increment(
     IncrementStrategy fallbackIncrement)
     {
         // Arrange
         var branchMock = GitToolsTestingExtensions.CreateMockBranch("unknown", GitToolsTestingExtensions.CreateMockCommit());
-        var configuration = GitFlowConfigurationBuilder.New.WithIncrement(fallbackIncrement).Build();
+        var configuration = GitFlowConfigurationBuilder.New
+            .WithIncrement(fallbackIncrement)
+            .WithBranch("unknown", builder => builder.WithIncrement(IncrementStrategy.Inherit))
+            .Build();
         var repositoryStoreMock = Substitute.For<IRepositoryStore>();
-        repositoryStoreMock.GetSourceBranches(branchMock, configuration, Arg.Any<HashSet<IBranch>>()).Returns(Enumerable.Empty<IBranch>());
+        repositoryStoreMock.GetSourceBranches(branchMock, configuration, Arg.Any<HashSet<IBranch>>()).Returns([]);
 
         var unitUnderTest = new EffectiveBranchConfigurationFinder(Substitute.For<ILog>(), repositoryStoreMock);
 
@@ -309,14 +281,14 @@ public class EffectiveBranchConfigurationFinderTests
     }
 
     [Theory]
-    public void When_getting_configurations_of_an_unknown_branch_Given_fallback_configuaration_with_increment_and_develop_branch_with_increment_Then_result_should_have_develop_increment(
-        IncrementStrategy fallbackIncrement, IncrementStrategy developBranchIncrement)
+    public void When_getting_configurations_of_an_unknown_branch_Given_fallback_configuration_with_increment_and_develop_branch_with_increment_Then_result_should_have_develop_increment(
+        IncrementStrategy fallbackIncrement, IncrementStrategy developIncrement)
     {
         // Arrange
         var unknownBranchMock = GitToolsTestingExtensions.CreateMockBranch("unknown", GitToolsTestingExtensions.CreateMockCommit());
         var configuration = GitFlowConfigurationBuilder.New
             .WithIncrement(fallbackIncrement)
-            .WithBranch("develop", builder => builder.WithIncrement(developBranchIncrement))
+            .WithBranch("develop", builder => builder.WithIncrement(developIncrement))
             .Build();
         var repositoryStoreMock = Substitute.For<IRepositoryStore>();
         var developBranchMock = GitToolsTestingExtensions.CreateMockBranch("develop", GitToolsTestingExtensions.CreateMockCommit());
@@ -328,26 +300,21 @@ public class EffectiveBranchConfigurationFinderTests
         var actual = unitUnderTest.GetConfigurations(unknownBranchMock, configuration).ToArray();
 
         // Assert
-        actual.ShouldHaveSingleItem();
-        actual[0].Branch.ShouldBe(developBranchMock);
-
-        if (developBranchIncrement == IncrementStrategy.Inherit)
+        if (fallbackIncrement == IncrementStrategy.Inherit && developIncrement == IncrementStrategy.Inherit)
         {
-            if (fallbackIncrement == IncrementStrategy.Inherit)
-            {
-                fallbackIncrement = IncrementStrategy.None;
-            }
-            actual[0].Value.Increment.ShouldBe(fallbackIncrement);
+            actual.ShouldBeEmpty();
         }
         else
         {
-            actual[0].Value.Increment.ShouldBe(developBranchIncrement);
-        }
+            actual.ShouldHaveSingleItem();
+            actual[0].Branch.ShouldBe(developBranchMock);
 
+            actual[0].Value.Increment.ShouldBe(developIncrement == IncrementStrategy.Inherit ? fallbackIncrement : developIncrement);
+        }
     }
 
     [Theory]
-    public void When_getting_configurations_of_an_unknown_branch_Given_fallback_configuaration_with_increment_and_develop_branch_with_increment_inherit_Then_result_should_have_fallback_increment(
+    public void When_getting_configurations_of_an_unknown_branch_Given_fallback_configuration_with_increment_and_develop_branch_with_increment_inherit_Then_result_should_have_fallback_increment(
         IncrementStrategy fallbackIncrement)
     {
         // Arrange
@@ -366,21 +333,23 @@ public class EffectiveBranchConfigurationFinderTests
         var actual = unitUnderTest.GetConfigurations(unknownBranchMock, configuration).ToArray();
 
         // Assert
-        actual.ShouldHaveSingleItem();
-        actual[0].Branch.ShouldBe(developBranchMock);
-
         if (fallbackIncrement == IncrementStrategy.Inherit)
         {
-            fallbackIncrement = IncrementStrategy.None;
+            actual.ShouldBeEmpty();
         }
-        actual[0].Value.Increment.ShouldBe(fallbackIncrement);
+        else
+        {
+            actual.ShouldHaveSingleItem();
+            actual[0].Branch.ShouldBe(developBranchMock);
+            actual[0].Value.Increment.ShouldBe(fallbackIncrement);
+        }
     }
 
     [TestCase(IncrementStrategy.None)]
     [TestCase(IncrementStrategy.Patch)]
     [TestCase(IncrementStrategy.Minor)]
     [TestCase(IncrementStrategy.Major)]
-    public void When_getting_configurations_of_an_unknown_branch_Given_fallback_and_unknown_configuaration_with_increment_inherit_and_develop_branch_with_increment_Then_result_should_have_develop_branch_increment(
+    public void When_getting_configurations_of_an_unknown_branch_Given_fallback_and_unknown_configuration_with_increment_inherit_and_develop_branch_with_increment_Then_result_should_have_develop_branch_increment(
         IncrementStrategy developBranchIncrement)
     {
         // Arrange

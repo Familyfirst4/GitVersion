@@ -1,13 +1,15 @@
-using GitVersion.BuildAgents;
+using GitVersion.Agents;
+using GitVersion.Configuration;
 using GitVersion.Extensions;
 using GitVersion.Logging;
 using GitVersion.MsBuild.Tasks;
+using GitVersion.Output;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
 namespace GitVersion.MsBuild;
 
-public static class GitVersionTasks
+internal static class GitVersionTasks
 {
     public static bool GetVersion(GetVersion task) => ExecuteGitVersionTask(task, executor => executor.GetVersion(task));
 
@@ -66,12 +68,14 @@ public static class GitVersionTasks
             WorkingDirectory = task.SolutionDirectory
         };
 
-        gitVersionOptions.Output.Add(OutputType.BuildServer);
-
         services.AddSingleton(Options.Create(gitVersionOptions));
-        services.AddModule(new GitVersionTaskModule());
-
+        services.AddModule(new GitVersionConfigurationModule());
+        services.AddModule(new GitVersionCoreModule());
+        services.AddModule(new GitVersionBuildAgentsModule());
+        services.AddModule(new GitVersionOutputModule());
+        services.AddModule(new GitVersionMsBuildModule());
         services.AddSingleton<IConsole>(new MsBuildAdapter(task.Log));
+        task.Overrides?.Invoke(services);
 
         var sp = services.BuildServiceProvider();
         Configure(sp, task);

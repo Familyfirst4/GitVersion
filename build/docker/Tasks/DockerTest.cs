@@ -4,10 +4,10 @@ namespace Docker.Tasks;
 
 [TaskName(nameof(DockerTest))]
 [TaskDescription("Test the docker images containing the GitVersion Tool")]
-[TaskArgument(Arguments.DockerRegistry, Constants.DockerHub, Constants.GitHub)]
-[TaskArgument(Arguments.DockerDotnetVersion, Constants.Version60, Constants.Version70)]
-[TaskArgument(Arguments.DockerDistro, Constants.Alpine313, Constants.Debian10, Constants.Ubuntu2004)]
-[TaskArgument(Arguments.Architecture, Constants.Amd64, Constants.Arm64)]
+[DockerRegistryArgument]
+[DockerDotnetArgument]
+[DockerDistroArgument]
+[ArchitectureArgument]
 [IsDependentOn(typeof(DockerBuild))]
 public class DockerTest : FrostingTask<BuildContext>
 {
@@ -23,7 +23,7 @@ public class DockerTest : FrostingTask<BuildContext>
     {
         foreach (var dockerImage in context.Images)
         {
-            if (context.SkipImage(dockerImage)) continue;
+            if (context.SkipImageTesting(dockerImage)) continue;
             context.DockerTestImage(dockerImage);
         }
     }

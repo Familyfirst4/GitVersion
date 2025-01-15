@@ -1,38 +1,40 @@
 using GitVersion.Configuration;
 using GitVersion.Extensions;
+using GitVersion.Git;
+using GitVersion.Helpers;
 using GitVersion.Logging;
 
 namespace GitVersion;
 
-public class GitVersionExecutor : IGitVersionExecutor
+internal class GitVersionExecutor(
+    ILog log,
+    IFileSystem fileSystem,
+    IConsole console,
+    IVersionWriter versionWriter,
+    IHelpWriter helpWriter,
+    IConfigurationFileLocator configurationFileLocator,
+    IConfigurationProvider configurationProvider,
+    IConfigurationSerializer configurationSerializer,
+    IGitVersionCalculateTool gitVersionCalculateTool,
+    IGitVersionOutputTool gitVersionOutputTool,
+    IGitRepository gitRepository,
+    IGitRepositoryInfo repositoryInfo)
+    : IGitVersionExecutor
 {
-    private readonly ILog log;
-    private readonly IConsole console;
-    private readonly IConfigurationFileLocator configFileLocator;
-    private readonly IHelpWriter helpWriter;
-    private readonly IGitRepositoryInfo repositoryInfo;
-    private readonly IConfigurationProvider configurationProvider;
-    private readonly IGitVersionCalculateTool gitVersionCalculateTool;
-    private readonly IGitVersionOutputTool gitVersionOutputTool;
-    private readonly IVersionWriter versionWriter;
+    private readonly ILog log = log.NotNull();
+    private readonly IFileSystem fileSystem = fileSystem.NotNull();
+    private readonly IConsole console = console.NotNull();
+    private readonly IVersionWriter versionWriter = versionWriter.NotNull();
+    private readonly IHelpWriter helpWriter = helpWriter.NotNull();
 
-    public GitVersionExecutor(ILog log, IConsole console,
-        IConfigurationFileLocator configFileLocator, IConfigurationProvider configurationProvider,
-        IGitVersionCalculateTool gitVersionCalculateTool, IGitVersionOutputTool gitVersionOutputTool,
-        IVersionWriter versionWriter, IHelpWriter helpWriter, IGitRepositoryInfo repositoryInfo)
-    {
-        this.log = log.NotNull();
-        this.console = console.NotNull();
-        this.configFileLocator = configFileLocator.NotNull();
-        this.configurationProvider = configurationProvider.NotNull();
+    private readonly IConfigurationFileLocator configurationFileLocator = configurationFileLocator.NotNull();
+    private readonly IConfigurationProvider configurationProvider = configurationProvider.NotNull();
+    private readonly IConfigurationSerializer configurationSerializer = configurationSerializer.NotNull();
 
-        this.gitVersionCalculateTool = gitVersionCalculateTool.NotNull();
-        this.gitVersionOutputTool = gitVersionOutputTool.NotNull();
-
-        this.versionWriter = versionWriter.NotNull();
-        this.helpWriter = helpWriter.NotNull();
-        this.repositoryInfo = repositoryInfo.NotNull();
-    }
+    private readonly IGitVersionCalculateTool gitVersionCalculateTool = gitVersionCalculateTool.NotNull();
+    private readonly IGitVersionOutputTool gitVersionOutputTool = gitVersionOutputTool.NotNull();
+    private readonly IGitRepository gitRepository = gitRepository.NotNull();
+    private readonly IGitRepositoryInfo repositoryInfo = repositoryInfo.NotNull();
 
     public int Execute(GitVersionOptions gitVersionOptions)
     {
@@ -52,6 +54,7 @@ public class GitVersionExecutor : IGitVersionExecutor
 
     private int RunGitVersionTool(GitVersionOptions gitVersionOptions)
     {
+        this.gitRepository.DiscoverRepository(gitVersionOptions.WorkingDirectory);
         var mutexName = this.repositoryInfo.DotGitDirectory?.Replace(Path.DirectorySeparatorChar.ToString(), "") ?? string.Empty;
         using var mutex = new Mutex(true, $@"Global\gitversion{mutexName}", out var acquired);
 
@@ -64,33 +67,30 @@ public class GitVersionExecutor : IGitVersionExecutor
 
             var variables = this.gitVersionCalculateTool.CalculateVersionVariables();
 
-            var configuration = this.configurationProvider.Provide(gitVersionOptions.ConfigInfo.OverrideConfig);
+            var configuration = this.configurationProvider.Provide(gitVersionOptions.ConfigurationInfo.OverrideConfiguration);
 
-            this.gitVersionOutputTool.OutputVariables(variables, configuration.UpdateBuildNumber ?? true);
+            this.gitVersionOutputTool.OutputVariables(variables, configuration.UpdateBuildNumber);
             this.gitVersionOutputTool.UpdateAssemblyInfo(variables);
             this.gitVersionOutputTool.UpdateWixVersionFile(variables);
         }
         catch (WarningException exception)
         {
-            var error = $"An error occurred:{System.Environment.NewLine}{exception.Message}";
+            var error = $"An error occurred:{PathHelper.NewLine}{exception.Message}";
             this.log.Warning(error);
             return 1;
         }
         catch (Exception exception)
         {
-            var error = $"An unexpected error occurred:{System.Environment.NewLine}{exception}";
+            var error = $"An unexpected error occurred:{PathHelper.NewLine}{exception}";
             this.log.Error(error);
-
-            this.log.Info("Attempting to show the current git graph (please include in issue): ");
-            this.log.Info("Showing max of 100 commits");
 
             try
             {
-                GitExtensions.DumpGraph(gitVersionOptions.WorkingDirectory, mess => this.log.Info(mess), 100);
+                GitExtensions.DumpGraphLog(logMessage => this.log.Info(logMessage));
             }
             catch (Exception dumpGraphException)
             {
-                this.log.Error("Couldn't dump the git graph due to the following error: " + dumpGraphException);
+                this.log.Error($"Couldn't dump the git graph due to the following error: {dumpGraphException}");
             }
             return 1;
         }
@@ -130,11 +130,10 @@ public class GitVersionExecutor : IGitVersionExecutor
         var workingDirectory = gitVersionOptions.WorkingDirectory;
         if (gitVersionOptions.Diag)
         {
-            this.log.Info("Dumping commit graph: ");
-            GitExtensions.DumpGraph(workingDirectory, mess => this.log.Info(mess), 100);
+            GitExtensions.DumpGraphLog(logMessage => this.log.Info(logMessage));
         }
 
-        if (!Directory.Exists(workingDirectory))
+        if (!this.fileSystem.DirectoryExists(workingDirectory))
         {
             this.log.Warning($"The working directory '{workingDirectory}' does not exist.");
         }
@@ -143,19 +142,15 @@ public class GitVersionExecutor : IGitVersionExecutor
             this.log.Info("Working directory: " + workingDirectory);
         }
 
-        this.configFileLocator.Verify(gitVersionOptions, this.repositoryInfo);
-
-        if (gitVersionOptions.Init)
+        if (gitVersionOptions.ConfigurationInfo.ShowConfiguration)
         {
-            this.configurationProvider.Init(workingDirectory);
-            exitCode = 0;
-            return true;
-        }
-
-        if (gitVersionOptions.ConfigInfo.ShowConfig)
-        {
-            var configuration = this.configurationProvider.Provide(workingDirectory);
-            this.console.WriteLine(configuration.ToString());
+            if (gitVersionOptions.RepositoryInfo.TargetUrl.IsNullOrWhiteSpace())
+            {
+                this.configurationFileLocator.Verify(workingDirectory, this.repositoryInfo.ProjectRootDirectory);
+            }
+            var configuration = this.configurationProvider.Provide();
+            var configurationString = configurationSerializer.Serialize(configuration);
+            this.console.WriteLine(configurationString);
             exitCode = 0;
             return true;
         }
@@ -166,7 +161,7 @@ public class GitVersionExecutor : IGitVersionExecutor
 
     private static void ConfigureLogging(GitVersionOptions gitVersionOptions, ILog log)
     {
-        if (gitVersionOptions.Output.Contains(OutputType.BuildServer) || gitVersionOptions.LogFilePath == "console" || gitVersionOptions.Init)
+        if (gitVersionOptions.Output.Contains(OutputType.BuildServer) || gitVersionOptions.LogFilePath == "console")
         {
             log.AddLogAppender(new ConsoleAppender());
         }

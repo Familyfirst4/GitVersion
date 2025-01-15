@@ -2,7 +2,7 @@ using GitVersion.Extensions;
 
 namespace GitVersion;
 
-public static class QuotedStringHelpers
+internal static class QuotedStringHelpers
 {
     /// <summary>
     /// Splits input string based on split-character, ignoring split-character in
@@ -23,7 +23,7 @@ public static class QuotedStringHelpers
     public static string[] SplitUnquoted(string? input, char splitChar)
     {
         if (input == null)
-            return Array.Empty<string>();
+            return [];
 
         var split = new List<string>();
         bool isPreviousCharBackslash = false;
@@ -50,7 +50,7 @@ public static class QuotedStringHelpers
             isPreviousCharBackslash = current == '\\';
         }
 
-        split.Add(input.Substring(startIndex, input.Length - startIndex));
+        split.Add(input[startIndex..]);
 
         return split.Where(argument => !argument.IsNullOrEmpty()).ToArray();
     }
@@ -71,7 +71,7 @@ public static class QuotedStringHelpers
         if (sb[0] == '"')
             sb.Remove(0, 1);
 
-        if (sb[sb.Length - 1] == '"' && sb[sb.Length - 2] != '\\')
+        if (sb[^1] == '"' && sb[^2] != '\\')
             sb.Remove(sb.Length - 1, 1);
 
         sb.Replace("\\\"", "\""); // unescape quotes.

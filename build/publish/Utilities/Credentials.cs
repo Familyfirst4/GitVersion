@@ -4,14 +4,14 @@ namespace Publish.Utilities;
 
 public class Credentials
 {
-    public GitHubCredentials? GitHub { get; private set; }
-    public NugetCredentials? Nuget { get; private set; }
-    public ChocolateyCredentials? Chocolatey { get; private set; }
+    public GitHubCredentials? GitHub { get; private init; }
+    public NugetCredentials? Nuget { get; private init; }
+    public ChocolateyCredentials? Chocolatey { get; private init; }
 
     public static Credentials GetCredentials(ICakeContext context) => new()
     {
-        GitHub = new GitHubCredentials(context.EnvironmentVariable("GITHUB_TOKEN")),
-        Nuget = new NugetCredentials(context.EnvironmentVariable("NUGET_API_KEY")),
-        Chocolatey = new ChocolateyCredentials(context.EnvironmentVariable("CHOCOLATEY_API_KEY")),
+        GitHub = new(context.EnvironmentVariable("GITHUB_TOKEN")),
+        Nuget = new(context.EnvironmentVariable("NUGET_API_KEY")),
+        Chocolatey = new(context.EnvironmentVariable("CHOCOLATEY_API_KEY")),
     };
 }

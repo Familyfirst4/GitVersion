@@ -2,10 +2,10 @@ namespace Common.Utilities;
 
 public class Tools
 {
-    public const string NugetCmd = "NuGet.CommandLine";
+    public const string CodecovUploaderCmd = "CodecovUploader";
 
     public static readonly Dictionary<string, string> Versions = new()
     {
-        { NugetCmd, "6.3.1" },
+        { CodecovUploaderCmd, "0.8.0" }
     };
 }

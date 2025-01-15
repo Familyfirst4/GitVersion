@@ -1,19 +1,15 @@
 using System.Text.RegularExpressions;
 using GitVersion.Configuration;
+using GitVersion.Core;
 using GitVersion.Extensions;
+using GitVersion.Git;
 
 namespace GitVersion;
 
-internal class SourceBranchFinder
+internal class SourceBranchFinder(IEnumerable<IBranch> excludedBranches, IGitVersionConfiguration configuration)
 {
-    private readonly GitVersionConfiguration configuration;
-    private readonly IEnumerable<IBranch> excludedBranches;
-
-    public SourceBranchFinder(IEnumerable<IBranch> excludedBranches, GitVersionConfiguration configuration)
-    {
-        this.excludedBranches = excludedBranches.NotNull();
-        this.configuration = configuration.NotNull();
-    }
+    private readonly IGitVersionConfiguration configuration = configuration.NotNull();
+    private readonly IEnumerable<IBranch> excludedBranches = excludedBranches.NotNull();
 
     public IEnumerable<IBranch> FindSourceBranchesOf(IBranch branch)
     {
@@ -21,43 +17,35 @@ internal class SourceBranchFinder
         return this.excludedBranches.Where(predicate.IsSourceBranch);
     }
 
-    private class SourceBranchPredicate
+    private class SourceBranchPredicate(IBranch branch, IGitVersionConfiguration configuration)
     {
-        private readonly IBranch branch;
-        private readonly IEnumerable<string> sourceBranchRegexes;
-
-        public SourceBranchPredicate(IBranch branch, GitVersionConfiguration configuration)
-        {
-            this.branch = branch;
-            this.sourceBranchRegexes = GetSourceBranchRegexes(branch, configuration);
-        }
+        private readonly IEnumerable<Regex> sourceBranchRegexes = GetSourceBranchRegexes(branch, configuration);
 
         public bool IsSourceBranch(INamedReference sourceBranchCandidate)
         {
-            if (Equals(sourceBranchCandidate, this.branch))
+            if (Equals(sourceBranchCandidate, branch))
                 return false;
 
-            var branchName = sourceBranchCandidate.Name.Friendly;
+            var branchName = sourceBranchCandidate.Name.WithoutOrigin;
 
-            return this.sourceBranchRegexes
-                .Any(regex => Regex.IsMatch(branchName, regex));
+            return this.sourceBranchRegexes.Any(regex => regex.IsMatch(branchName));
         }
 
-        private static IEnumerable<string> GetSourceBranchRegexes(INamedReference branch, GitVersionConfiguration configuration)
+        private static IEnumerable<Regex> GetSourceBranchRegexes(INamedReference branch, IGitVersionConfiguration configuration)
         {
-            var branchName = branch.Name.WithoutRemote;
-            var currentBranchConfig = configuration.GetBranchConfiguration(branchName);
+            var currentBranchConfig = configuration.GetBranchConfiguration(branch.Name);
             if (currentBranchConfig.SourceBranches == null)
             {
-                yield return ".*";
+                yield return RegexPatterns.Cache.GetOrAdd(".*");
             }
             else
             {
+                var branches = configuration.Branches;
                 foreach (var sourceBranch in currentBranchConfig.SourceBranches)
                 {
-                    var regex = configuration.Branches[sourceBranch]?.Regex;
+                    var regex = branches[sourceBranch].RegularExpression;
                     if (regex != null)
-                        yield return regex;
+                        yield return RegexPatterns.Cache.GetOrAdd(regex);
                 }
             }
         }

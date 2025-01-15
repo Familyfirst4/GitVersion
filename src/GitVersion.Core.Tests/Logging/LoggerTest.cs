@@ -1,7 +1,5 @@
 using GitVersion.Core.Tests.Helpers;
 using GitVersion.Logging;
-using NUnit.Framework;
-using Shouldly;
 
 namespace GitVersion.Core.Tests;
 
@@ -37,7 +35,7 @@ public class LoggerTest : TestBase
         var logAppender = new TestLogAppender(Action);
         var log = new Log(logAppender);
 
-        const string repoUrl = "http://username@workspace.visualstudio.com/DefaultCollection/_git/CAS";
+        const string repoUrl = "https://username@workspace.visualstudio.com/DefaultCollection/_git/CAS";
 
         log.Info(repoUrl);
 

@@ -1,8 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <TargetFramework>netstandard2.0</TargetFramework>
-
         <PackageId>GitVersion.MsBuild</PackageId>
         <Title>GitVersionMsBuild</Title>
         <PackageVersion Condition="$(PackageVersion) == '' Or $(PackageVersion) == '*Undefined*'">0.0.1-alpha-0001</PackageVersion>
@@ -10,18 +8,38 @@
         <IncludeBuildOutput>false</IncludeBuildOutput>
         <DevelopmentDependency>true</DevelopmentDependency>
         <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+
+        <BinPath>bin/$(Configuration)</BinPath>
+        <ExePublishPath>../GitVersion.App/$(BinPath)</ExePublishPath>
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="Microsoft.Build.Utilities.Core" PrivateAssets="All" />
-        <PackageReference Include="Microsoft.Win32.Registry" PrivateAssets="All" />
-        <PackageReference Include="Microsoft.Extensions.DependencyInjection" PrivateAssets="All" />
+        <PackageReference Include="Microsoft.Build.Utilities.Core" />
+        <PackageReference Include="Microsoft.Win32.Registry" />
+        <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+        <!-- Marks all packages as 'local only' so they don't end up in the nuspec. -->
+        <PackageReference Update="@(PackageReference)" PrivateAssets="All"/>
     </ItemGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\GitVersion.Core\GitVersion.Core.csproj" PrivateAssets="All" />
+        <ProjectReference Include="..\GitVersion.BuildAgents\GitVersion.BuildAgents.csproj" />
+        <ProjectReference Include="..\GitVersion.Configuration\GitVersion.Configuration.csproj" />
+        <ProjectReference Include="..\GitVersion.Core\GitVersion.Core.csproj" />
+        <ProjectReference Include="..\GitVersion.Output\GitVersion.Output.csproj" />
+        <ProjectReference Update="@(ProjectReference)" PrivateAssets="All"/>
     </ItemGroup>
 
-    <Import Project="nuget-files.props" />
+    <ItemGroup>
+        <InternalsVisibleTo Include="GitVersion.MsBuild.Tests" />
+    </ItemGroup>
+
+    <ItemGroup Condition="$(IsPackaging) != ''">
+        <None Include="msbuild/tools/*.*" Pack="true" PackagePath="tools" />
+        <None Include="msbuild/build/*.*" Pack="true" PackagePath="build" />
+        <None Include="msbuild/buildMultiTargeting/*.*" Pack="true" PackagePath="buildMultiTargeting" />
+
+        <None Include="$(ExePublishPath)/net8.0/publish/**/*;$(BinPath)/net8.0/GitVersion.MsBuild.*" Pack="true" PackagePath="tools/net8.0" />
+        <None Include="$(ExePublishPath)/net9.0/publish/**/*;$(BinPath)/net9.0/GitVersion.MsBuild.*" Pack="true" PackagePath="tools/net9.0" />
+    </ItemGroup>
 
 </Project>

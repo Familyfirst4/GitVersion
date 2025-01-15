@@ -2,7 +2,7 @@ using GitVersion.Helpers;
 
 namespace GitVersion;
 
-public class FileSystem : IFileSystem
+internal class FileSystem : IFileSystem
 {
     public void Copy(string from, string to, bool overwrite) => File.Copy(from, to, overwrite);
 
@@ -24,18 +24,9 @@ public class FileSystem : IFileSystem
 
     public void WriteAllText(string? file, string fileContents, Encoding encoding)
     {
-        if (string.IsNullOrEmpty(file))
-            throw new ArgumentNullException(nameof(file));
+        ArgumentException.ThrowIfNullOrWhiteSpace(file);
 
         File.WriteAllText(file, fileContents, encoding);
-    }
-
-    public IEnumerable<string> DirectoryEnumerateFiles(string? directory, string searchPattern, SearchOption searchOption)
-    {
-        if (string.IsNullOrEmpty(directory))
-            throw new ArgumentNullException(nameof(directory));
-
-        return Directory.EnumerateFiles(directory, searchPattern, searchOption);
     }
 
     public Stream OpenWrite(string path) => File.OpenWrite(path);
@@ -46,16 +37,23 @@ public class FileSystem : IFileSystem
 
     public bool DirectoryExists(string path) => Directory.Exists(path);
 
+    public string[] GetFiles(string path) => Directory.GetFiles(path);
+
+    public string[] GetDirectories(string path) => Directory.GetDirectories(path);
+
+    public IEnumerable<string> DirectoryEnumerateFiles(string? directory, string searchPattern, SearchOption searchOption)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(directory);
+
+        return Directory.EnumerateFiles(directory, searchPattern, searchOption);
+    }
+
+    public long GetLastWriteTime(string path) => File.GetLastWriteTime(path).Ticks;
+
     public long GetLastDirectoryWrite(string path) => new DirectoryInfo(path)
         .GetDirectories("*.*", SearchOption.AllDirectories)
         .Select(d => d.LastWriteTimeUtc)
         .DefaultIfEmpty()
         .Max()
         .Ticks;
-
-    public bool PathsEqual(string? path, string? otherPath) =>
-        string.Equals(
-            PathHelper.GetFullPath(path).TrimEnd('\\').TrimEnd('/'),
-            PathHelper.GetFullPath(otherPath).TrimEnd('\\').TrimEnd('/'),
-            StringComparerUtils.OsDependentComparison);
 }

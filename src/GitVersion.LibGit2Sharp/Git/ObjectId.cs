@@ -1,7 +1,7 @@
 using GitVersion.Extensions;
 using GitVersion.Helpers;
 
-namespace GitVersion;
+namespace GitVersion.Git;
 
 internal sealed class ObjectId : IObjectId
 {
@@ -17,9 +17,9 @@ internal sealed class ObjectId : IObjectId
     {
     }
 
-    public int CompareTo(IObjectId other) => comparerHelper.Compare(this, other);
+    public int CompareTo(IObjectId? other) => comparerHelper.Compare(this, other);
     public bool Equals(IObjectId? other) => equalityHelper.Equals(this, other);
-    public override bool Equals(object obj) => Equals((obj as IObjectId));
+    public override bool Equals(object? obj) => Equals(obj as IObjectId);
     public override int GetHashCode() => equalityHelper.GetHashCode(this);
     public override string ToString() => ToString(7);
     public static implicit operator LibGit2Sharp.ObjectId(ObjectId d) => d.innerObjectId;

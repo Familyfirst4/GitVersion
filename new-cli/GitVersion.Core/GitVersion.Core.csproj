@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <ItemGroup>
+        <ProjectReference Include="..\GitVersion.Common\GitVersion.Common.csproj" />
+    </ItemGroup>
+    <ItemGroup>
+        <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+        <PackageReference Include="Serilog.Extensions.Logging" />
+        <PackageReference Include="Serilog.Sinks.Console" />
+        <PackageReference Include="Serilog.Sinks.File" />
+        <PackageReference Include="Serilog.Sinks.Map" />
+    </ItemGroup>
+    <ItemGroup>
+      <Compile Include="..\..\src\GitVersion.Core\Core\Environment.cs">
+        <Link>Infrastructure\Environment.cs</Link>
+      </Compile>
+      <Compile Include="..\..\src\GitVersion.Core\Core\FileSystem.cs">
+        <Link>Infrastructure\FileSystem.cs</Link>
+      </Compile>
+    </ItemGroup>
+</Project>

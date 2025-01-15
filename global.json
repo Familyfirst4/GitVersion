@@ -1,0 +1,10 @@
+{
+  "projects": [
+    "build",
+    "new-cli",
+    "src"
+  ],
+  "sdk": {
+    "version": "9.0.102"
+  }
+}

@@ -1,14 +1,17 @@
 using GitVersion.Extensions;
 
-namespace GitVersion;
+namespace GitVersion.Git;
 
 internal sealed class RefSpecCollection : IRefSpecCollection
 {
-    private readonly LibGit2Sharp.RefSpecCollection innerCollection;
+    private readonly Lazy<IReadOnlyCollection<IRefSpec>> refSpecs;
 
     internal RefSpecCollection(LibGit2Sharp.RefSpecCollection collection)
-        => this.innerCollection = collection.NotNull();
+    {
+        collection = collection.NotNull();
+        this.refSpecs = new Lazy<IReadOnlyCollection<IRefSpec>>(() => collection.Select(tag => new RefSpec(tag)).ToArray());
+    }
 
-    public IEnumerator<IRefSpec> GetEnumerator() => this.innerCollection.Select(tag => new RefSpec(tag)).GetEnumerator();
+    public IEnumerator<IRefSpec> GetEnumerator() => this.refSpecs.Value.GetEnumerator();
     IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 }

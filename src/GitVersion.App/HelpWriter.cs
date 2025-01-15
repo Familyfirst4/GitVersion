@@ -1,18 +1,13 @@
 using GitVersion.Extensions;
+using GitVersion.Helpers;
 using GitVersion.Logging;
 
 namespace GitVersion;
 
-public class HelpWriter : IHelpWriter
+internal class HelpWriter(IVersionWriter versionWriter, IConsole console) : IHelpWriter
 {
-    private readonly IVersionWriter versionWriter;
-    private readonly IConsole console;
-
-    public HelpWriter(IVersionWriter versionWriter, IConsole console)
-    {
-        this.versionWriter = versionWriter.NotNull();
-        this.console = console.NotNull();
-    }
+    private readonly IVersionWriter versionWriter = versionWriter.NotNull();
+    private readonly IConsole console = console.NotNull();
 
     public void Write() => WriteTo(this.console.WriteLine);
 
@@ -23,8 +18,7 @@ public class HelpWriter : IHelpWriter
         this.versionWriter.WriteTo(assembly, v => version = v);
 
         var args = ArgumentList();
-        var nl = System.Environment.NewLine;
-        var message = "GitVersion " + version + nl + nl + args;
+        var message = $"GitVersion {version}{PathHelper.NewLine}{PathHelper.NewLine}{args}";
 
         writeAction(message);
     }
