@@ -8,9 +8,7 @@ namespace Release.Tasks;
 [TaskDescription("Publish release")]
 [IsDependentOn(typeof(PublishReleaseInternal))]
 
-public class PublishRelease : FrostingTask<BuildContext>
-{
-}
+public class PublishRelease : FrostingTask<BuildContext>;
 
 [TaskName(nameof(PublishReleaseInternal))]
 [TaskDescription("Publish release")]
@@ -20,7 +18,7 @@ public class PublishReleaseInternal : FrostingTask<BuildContext>
     {
         var shouldRun = true;
         shouldRun &= context.ShouldRun(context.IsGitHubActionsBuild, $"{nameof(PublishRelease)} works only on GitHub Actions.");
-        shouldRun &= context.ShouldRun(context.IsStableRelease, $"{nameof(PublishRelease)} works only for releases.");
+        shouldRun &= context.ShouldRun(context.IsStableRelease || context.IsTaggedPreRelease, $"{nameof(PublishRelease)} works only for tagged releases.");
 
         return shouldRun;
     }
@@ -47,7 +45,7 @@ public class PublishReleaseInternal : FrostingTask<BuildContext>
             Milestone = milestone,
             Name = milestone,
             Prerelease = false,
-            TargetCommitish = "main"
+            TargetCommitish = Constants.DefaultBranch
         });
 
         context.GitReleaseManagerAddAssets(token, Constants.RepoOwner, Constants.Repository, milestone, assets);

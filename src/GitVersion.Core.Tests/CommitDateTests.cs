@@ -1,5 +1,5 @@
+using GitVersion.Configuration;
 using GitVersion.Core.Tests.Helpers;
-using NUnit.Framework;
 
 namespace GitVersion.Core.Tests;
 
@@ -26,8 +26,8 @@ public class CommitDateTests : TestBase
         {
             BuildMetaData = semanticVersionBuildMetaData // assume time zone is UTC
         };
-        var configuration = new TestEffectiveConfiguration(commitDateFormat: format);
-        var formatValues = new SemanticVersionFormatValues(semanticVersion, configuration);
+        var configuration = EmptyConfigurationBuilder.New.WithCommitDateFormat(format).Build();
+        var formatValues = new SemanticVersionFormatValues(semanticVersion, configuration, 0);
 
         Assert.That(formatValues.CommitDate, Is.EqualTo(expectedOutcome));
     }

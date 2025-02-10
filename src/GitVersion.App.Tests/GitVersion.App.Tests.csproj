@@ -1,14 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
-    <PropertyGroup>
-        <TargetFrameworks>net6.0;net7.0</TargetFrameworks>
-
-        <IsTestProject>true</IsTestProject>
-    </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="Mono.Cecil"/>
+        <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
     </ItemGroup>
     <ItemGroup>
+        <ProjectReference Include="..\GitVersion.Configuration\GitVersion.Configuration.csproj" />
         <ProjectReference Include="..\GitVersion.Core\GitVersion.Core.csproj" />
         <ProjectReference Include="..\GitVersion.App\GitVersion.App.csproj" />
     </ItemGroup>
@@ -21,13 +17,12 @@
     <ItemGroup>
         <Compile Include="..\GitVersion.Core.Tests\Helpers\DirectoryHelper.cs" Link="Helpers\DirectoryHelper.cs" />
         <Compile Include="..\GitVersion.Core.Tests\Helpers\ExecutableHelper.cs" Link="Helpers\ExecutableHelper.cs" />
-        <Compile Include="..\GitVersion.Core.Tests\Helpers\TestEffectiveConfiguration.cs" Link="Helpers\TestEffectiveConfiguration.cs" />
+        <Compile Include="..\GitVersion.Core.Tests\Helpers\TestConsoleAdapter.cs" Link="Helpers\TestConsoleAdapter.cs" />
         <Compile Include="..\GitVersion.Core.Tests\Helpers\TestEnvironment.cs" Link="Helpers\TestEnvironment.cs" />
-        <Compile Include="..\GitVersion.Core.Tests\Helpers\TestFileSystem.cs" Link="Helpers\TestFileSystem.cs" />
         <Compile Include="..\GitVersion.Core.Tests\Helpers\TestLogAppender.cs" Link="Helpers\TestLogAppender.cs" />
-        <Compile Include="..\GitVersion.Core.Tests\Helpers\TestStream.cs" Link="Helpers\TestStream.cs" />
         <Compile Include="..\GitVersion.Core.Tests\Helpers\TestBase.cs" Link="Helpers\TestBase.cs" />
         <Compile Include="..\GitVersion.Core.Tests\Helpers\GitVersionCoreTestModule.cs" Link="Helpers\GitVersionCoreTestModule.cs" />
+        <Compile Include="..\GitVersion.Core.Tests\Extensions\GitVersionVariablesExtensions.cs" Link="Extensions\GitVersionVariablesExtensions.cs" />
     </ItemGroup>
 
 </Project>

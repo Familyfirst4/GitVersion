@@ -1,13 +1,9 @@
-using GitTools.Testing;
 using GitVersion.Configuration;
 using GitVersion.Core.Tests.Helpers;
-using GitVersion.Extensions;
 using GitVersion.Helpers;
 using GitVersion.Logging;
 using GitVersion.VersionCalculation;
 using Microsoft.Extensions.DependencyInjection;
-using NUnit.Framework;
-using Shouldly;
 
 namespace GitVersion.App.Tests;
 
@@ -16,6 +12,7 @@ public class ArgumentParserTests : TestBase
 {
     private IEnvironment environment;
     private IArgumentParser argumentParser;
+    private IFileSystem fileSystem;
 
     [SetUp]
     public void SetUp()
@@ -27,13 +24,14 @@ public class ArgumentParserTests : TestBase
         });
         this.environment = sp.GetRequiredService<IEnvironment>();
         this.argumentParser = sp.GetRequiredService<IArgumentParser>();
+        this.fileSystem = sp.GetRequiredService<IFileSystem>();
     }
 
     [Test]
     public void EmptyMeansUseCurrentDirectory()
     {
         var arguments = this.argumentParser.ParseArguments("");
-        arguments.TargetPath.ShouldBe(System.Environment.CurrentDirectory);
+        arguments.TargetPath.ShouldBe(SysEnv.CurrentDirectory);
         arguments.LogFilePath.ShouldBe(null);
         arguments.IsHelp.ShouldBe(false);
     }
@@ -51,7 +49,7 @@ public class ArgumentParserTests : TestBase
     public void NoPathAndLogfileShouldUseCurrentDirectoryTargetDirectory()
     {
         var arguments = this.argumentParser.ParseArguments("-l logFilePath");
-        arguments.TargetPath.ShouldBe(System.Environment.CurrentDirectory);
+        arguments.TargetPath.ShouldBe(SysEnv.CurrentDirectory);
         arguments.LogFilePath.ShouldBe("logFilePath");
         arguments.IsHelp.ShouldBe(false);
     }
@@ -60,8 +58,11 @@ public class ArgumentParserTests : TestBase
     public void HelpSwitchTest()
     {
         var arguments = this.argumentParser.ParseArguments("-h");
-        Assert.IsNull(arguments.TargetPath);
-        Assert.IsNull(arguments.LogFilePath);
+        Assert.Multiple(() =>
+        {
+            Assert.That(arguments.TargetPath, Is.Null);
+            Assert.That(arguments.LogFilePath, Is.Null);
+        });
         arguments.IsHelp.ShouldBe(true);
     }
 
@@ -69,8 +70,11 @@ public class ArgumentParserTests : TestBase
     public void VersionSwitchTest()
     {
         var arguments = this.argumentParser.ParseArguments("-version");
-        Assert.IsNull(arguments.TargetPath);
-        Assert.IsNull(arguments.LogFilePath);
+        Assert.Multiple(() =>
+        {
+            Assert.That(arguments.TargetPath, Is.Null);
+            Assert.That(arguments.LogFilePath, Is.Null);
+        });
         arguments.IsVersion.ShouldBe(true);
     }
 
@@ -335,7 +339,8 @@ public class ArgumentParserTests : TestBase
         using var file2 = File.Create(assemblyFile2);
 
         var subdir = PathHelper.Combine(repo.RepositoryPath, "subdir");
-        Directory.CreateDirectory(subdir);
+
+        this.fileSystem.CreateDirectory(subdir);
         var assemblyFile3 = PathHelper.Combine(subdir, "LocalAssemblyInfo.cs");
         using var file3 = File.Create(assemblyFile3);
 
@@ -356,7 +361,7 @@ public class ArgumentParserTests : TestBase
         using var file = File.Create(assemblyFile);
 
         var targetPath = PathHelper.Combine(repo.RepositoryPath, "subdir1", "subdir2");
-        Directory.CreateDirectory(targetPath);
+        this.fileSystem.CreateDirectory(targetPath);
 
         var arguments = this.argumentParser.ParseArguments($"-targetpath {targetPath} -updateAssemblyInfo ..\\..\\CommonAssemblyInfo.cs");
         arguments.UpdateAssemblyInfo.ShouldBe(true);
@@ -368,7 +373,7 @@ public class ArgumentParserTests : TestBase
     public void OverrideconfigWithNoOptions()
     {
         var arguments = this.argumentParser.ParseArguments("/overrideconfig");
-        arguments.OverrideConfig.ShouldBeNull();
+        arguments.OverrideConfiguration.ShouldBeNull();
     }
 
     [TestCaseSource(nameof(OverrideconfigWithInvalidOptionTestData))]
@@ -389,30 +394,15 @@ public class ArgumentParserTests : TestBase
         {
             ExpectedResult = "Could not parse /overrideconfig option: unknown-option=25. Unsupported 'key'."
         };
-        yield return new TestCaseData("update-build-number=1")
-        {
-            ExpectedResult = "Could not parse /overrideconfig option: update-build-number=1. Ensure that 'value' is 'true' or 'false'."
-        };
-        yield return new TestCaseData("tag-pre-release-weight=invalid-value")
-        {
-            ExpectedResult = "Could not parse /overrideconfig option: tag-pre-release-weight=invalid-value. Ensure that 'value' is valid integer number."
-        };
-        yield return new TestCaseData("assembly-versioning-scheme=WrongEnumValue")
-        {
-            ExpectedResult = $"Could not parse /overrideconfig option: assembly-versioning-scheme=WrongEnumValue. Ensure that 'value' is valid for specified 'key' enumeration: {System.Environment.NewLine}" +
-                             $"MajorMinorPatchTag{System.Environment.NewLine}" +
-                             $"MajorMinorPatch{System.Environment.NewLine}" +
-                             $"MajorMinor{System.Environment.NewLine}" +
-                             $"Major{System.Environment.NewLine}" +
-                             $"None{System.Environment.NewLine}"
-        };
     }
 
     [TestCaseSource(nameof(OverrideConfigWithSingleOptionTestData))]
-    public void OverrideConfigWithSingleOptions(string options, GitVersionConfiguration expected)
+    public void OverrideConfigWithSingleOptions(string options, IGitVersionConfiguration expected)
     {
         var arguments = this.argumentParser.ParseArguments($"/overrideconfig {options}");
-        arguments.OverrideConfig.ShouldBeEquivalentTo(expected);
+
+        ConfigurationHelper configurationHelper = new(arguments.OverrideConfiguration);
+        configurationHelper.Configuration.ShouldBeEquivalentTo(expected);
     }
 
     private static IEnumerable<TestCaseData> OverrideConfigWithSingleOptionTestData()
@@ -456,21 +446,21 @@ public class ArgumentParserTests : TestBase
             "mode=ContinuousDelivery",
             new GitVersionConfiguration
             {
-                VersioningMode = VersioningMode.ContinuousDelivery
+                DeploymentMode = DeploymentMode.ContinuousDelivery
             }
         );
         yield return new TestCaseData(
             "tag-prefix=sample",
             new GitVersionConfiguration
             {
-                TagPrefix = "sample"
+                TagPrefixPattern = "sample"
             }
         );
         yield return new TestCaseData(
-            "continuous-delivery-fallback-tag=cd-tag",
+            "label=cd-label",
             new GitVersionConfiguration
             {
-                ContinuousDeploymentFallbackTag = "cd-tag"
+                Label = "cd-label"
             }
         );
         yield return new TestCaseData(
@@ -543,22 +533,30 @@ public class ArgumentParserTests : TestBase
                 UpdateBuildNumber = true
             }
         );
+        yield return new TestCaseData(
+            "strategies=[\"None\",\"Mainline\"]",
+            new GitVersionConfiguration
+            {
+                VersionStrategies = [VersionStrategies.None, VersionStrategies.Mainline]
+            }
+        );
     }
 
-    [TestCaseSource(nameof(OverrideconfigWithMultipleOptionsTestData))]
-    public void OverrideconfigWithMultipleOptions(string options, GitVersionConfiguration expected)
+    [TestCaseSource(nameof(OverrideConfigWithMultipleOptionsTestData))]
+    public void OverrideConfigWithMultipleOptions(string options, IGitVersionConfiguration expected)
     {
         var arguments = this.argumentParser.ParseArguments(options);
-        arguments.OverrideConfig.ShouldBeEquivalentTo(expected);
+        ConfigurationHelper configurationHelper = new(arguments.OverrideConfiguration);
+        configurationHelper.Configuration.ShouldBeEquivalentTo(expected);
     }
 
-    private static IEnumerable<TestCaseData> OverrideconfigWithMultipleOptionsTestData()
+    private static IEnumerable<TestCaseData> OverrideConfigWithMultipleOptionsTestData()
     {
         yield return new TestCaseData(
             "/overrideconfig tag-prefix=sample /overrideconfig assembly-versioning-scheme=MajorMinor",
             new GitVersionConfiguration
             {
-                TagPrefix = "sample",
+                TagPrefixPattern = "sample",
                 AssemblyVersioningScheme = AssemblyVersioningScheme.MajorMinor
             }
         );
@@ -566,7 +564,7 @@ public class ArgumentParserTests : TestBase
             "/overrideconfig tag-prefix=sample /overrideconfig assembly-versioning-format=\"{Major}.{Minor}.{Patch}.{env:CI_JOB_ID ?? 0}\"",
             new GitVersionConfiguration
             {
-                TagPrefix = "sample",
+                TagPrefixPattern = "sample",
                 AssemblyVersioningFormat = "{Major}.{Minor}.{Patch}.{env:CI_JOB_ID ?? 0}"
             }
         );
@@ -574,11 +572,11 @@ public class ArgumentParserTests : TestBase
             "/overrideconfig tag-prefix=sample /overrideconfig assembly-versioning-format=\"{Major}.{Minor}.{Patch}.{env:CI_JOB_ID ?? 0}\" /overrideconfig update-build-number=true /overrideconfig assembly-versioning-scheme=MajorMinorPatchTag /overrideconfig mode=ContinuousDelivery /overrideconfig tag-pre-release-weight=4",
             new GitVersionConfiguration
             {
-                TagPrefix = "sample",
+                TagPrefixPattern = "sample",
                 AssemblyVersioningFormat = "{Major}.{Minor}.{Patch}.{env:CI_JOB_ID ?? 0}",
                 UpdateBuildNumber = true,
                 AssemblyVersioningScheme = AssemblyVersioningScheme.MajorMinorPatchTag,
-                VersioningMode = VersioningMode.ContinuousDelivery,
+                DeploymentMode = DeploymentMode.ContinuousDelivery,
                 TagPreReleaseWeight = 4
             }
         );
@@ -608,8 +606,8 @@ public class ArgumentParserTests : TestBase
     [Test]
     public void DynamicRepoLocation()
     {
-        var arguments = this.argumentParser.ParseArguments("-dynamicRepoLocation c:\\foo\\");
-        arguments.ClonePath.ShouldBe("c:\\foo\\");
+        var arguments = this.argumentParser.ParseArguments(@"-dynamicRepoLocation /tmp/foo");
+        arguments.ClonePath.ShouldBe("/tmp/foo");
     }
 
     [Test]
@@ -742,5 +740,34 @@ public class ArgumentParserTests : TestBase
         this.environment.SetEnvironmentVariable("GITVERSION_REMOTE_PASSWORD", "value");
         var arguments = this.argumentParser.ParseArguments("-nocache");
         arguments.Authentication.Password.ShouldBe("value");
+    }
+
+    [Test]
+    public void EnsureShowVariableIsSet()
+    {
+        var arguments = this.argumentParser.ParseArguments("-showvariable SemVer");
+        arguments.ShowVariable.ShouldBe("SemVer");
+    }
+
+    [Test]
+    public void EnsureFormatIsSet()
+    {
+        var arguments = this.argumentParser.ParseArguments("-format {Major}.{Minor}.{Patch}");
+        arguments.Format.ShouldBe("{Major}.{Minor}.{Patch}");
+    }
+
+    [TestCase("custom-config.yaml")]
+    [TestCase("/tmp/custom-config.yaml")]
+    public void ThrowIfConfigurationFileDoesNotExist(string configFile) =>
+        Should.Throw<WarningException>(() => _ = this.argumentParser.ParseArguments($"-config {configFile}"));
+
+    [Test]
+    public void EnsureConfigurationFileIsSet()
+    {
+        var configFile = PathHelper.GetTempPath() + Guid.NewGuid() + ".yaml";
+        File.WriteAllText(configFile, "next-version: 1.0.0");
+        var arguments = this.argumentParser.ParseArguments($"-config {configFile}");
+        arguments.ConfigurationFile.ShouldBe(configFile);
+        File.Delete(configFile);
     }
 }

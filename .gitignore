@@ -35,6 +35,7 @@
 *.dotCover
 *.orig
 *~
+msbuild.binlog
 
 ##  If you have NuGet Package Restore enabled, uncomment this
 packages/
@@ -117,7 +118,8 @@ releaseArtifacts
 .dotnet
 artifacts
 !build/artifacts
-src/Docker/**/content
+build/docker/nuget
+src/PublicAPI.empty.txt
 
 !**/*.cake
 .DS_Store
@@ -126,9 +128,11 @@ src/Docker/**/content
 config.wyam.dll
 config.wyam.hash
 config.wyam.packages.xml
-/tests/integration/core/build
-/tests/integration/full/build
+/tests/integration/build
 docs/output
 
 # NPM
 node_modules
+
+dogfood/
+new-cli/log.txt

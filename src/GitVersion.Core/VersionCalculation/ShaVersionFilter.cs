@@ -3,23 +3,21 @@ using GitVersion.Extensions;
 
 namespace GitVersion.VersionCalculation;
 
-public class ShaVersionFilter : IVersionFilter
+internal class ShaVersionFilter(IEnumerable<string> shaList) : IVersionFilter
 {
-    private readonly IEnumerable<string> shas;
+    private readonly IEnumerable<string> shaList = shaList.NotNull();
 
-    public ShaVersionFilter(IEnumerable<string> shas) => this.shas = shas.NotNull();
-
-    public bool Exclude(BaseVersion version, [NotNullWhen(true)] out string? reason)
+    public bool Exclude(IBaseVersion baseVersion, [NotNullWhen(true)] out string? reason)
     {
-        if (version == null) throw new ArgumentNullException(nameof(version));
+        baseVersion.NotNull();
 
         reason = null;
 
-        if (version.BaseVersionSource == null || !this.shas.Any(sha => version.BaseVersionSource.Sha.StartsWith(sha, StringComparison.OrdinalIgnoreCase)))
+        if (baseVersion.BaseVersionSource == null
+            || !this.shaList.Any(sha => baseVersion.BaseVersionSource.Sha.StartsWith(sha, StringComparison.OrdinalIgnoreCase)))
             return false;
 
-        reason = $"Sha {version.BaseVersionSource} was ignored due to commit having been excluded by configuration";
+        reason = $"Sha {baseVersion.BaseVersionSource} was ignored due to commit having been excluded by configuration";
         return true;
-
     }
 }

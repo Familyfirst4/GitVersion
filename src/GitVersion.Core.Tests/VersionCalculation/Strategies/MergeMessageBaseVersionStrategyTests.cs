@@ -1,11 +1,9 @@
 using GitVersion.Configuration;
 using GitVersion.Core.Tests.Helpers;
 using GitVersion.Extensions;
+using GitVersion.Git;
 using GitVersion.VersionCalculation;
 using Microsoft.Extensions.DependencyInjection;
-using NSubstitute;
-using NUnit.Framework;
-using Shouldly;
 
 namespace GitVersion.Core.Tests.VersionCalculation.Strategies;
 
@@ -23,26 +21,24 @@ public class MergeMessageBaseVersionStrategyTests : TestBase
 
         var mockBranch = GitToolsTestingExtensions.CreateMockBranch(MainBranch, mockCommit);
         var branches = Substitute.For<IBranchCollection>();
-        branches.GetEnumerator().Returns(_ => ((IEnumerable<IBranch>)new[]
-        {
-            mockBranch
-        }).GetEnumerator());
+        branches.MockCollectionReturn(mockBranch);
 
         var mockRepository = Substitute.For<IGitRepository>();
         mockRepository.Head.Returns(mockBranch);
         mockRepository.Branches.Returns(branches);
         mockRepository.Commits.Returns(mockBranch.Commits);
 
-        var contextBuilder = new GitVersionContextBuilder().WithRepository(mockRepository);
+        using var contextBuilder = new GitVersionContextBuilder().WithRepository(mockRepository);
         contextBuilder.Build();
         contextBuilder.ServicesProvider.ShouldNotBeNull();
         var strategy = contextBuilder.ServicesProvider.GetServiceForType<IVersionStrategy, MergeMessageVersionStrategy>();
         var context = contextBuilder.ServicesProvider.GetRequiredService<Lazy<GitVersionContext>>().Value;
-        var branchConfiguration = context.Configuration.GetBranchConfiguration(mockBranch);
-        var effectiveConfiguration = new EffectiveConfiguration(context.Configuration, branchConfiguration);
-        var baseVersion = strategy.GetBaseVersions(new(mockBranch, effectiveConfiguration)).Single();
 
-        baseVersion.ShouldIncrement.ShouldBe(false);
+        strategy.ShouldNotBeNull();
+        var configuration = context.Configuration.GetEffectiveBranchConfiguration(mockBranch);
+        var baseVersion = strategy.GetBaseVersions(configuration).Single();
+
+        baseVersion.GetIncrementedVersion().ToString().ShouldBe("0.1.5-1");
     }
 
     [TestCase("Merge branch 'release-10.10.50'", true, "10.10.50")]
@@ -58,6 +54,7 @@ public class MergeMessageBaseVersionStrategyTests : TestBase
     [TestCase("Merge branch 'Release-v0.2.0'", true, "0.2.0")]
     [TestCase("Merge remote-tracking branch 'origin/release/0.8.0' into develop/" + MainBranch, true, "0.8.0")]
     [TestCase("Merge remote-tracking branch 'refs/remotes/origin/release/2.0.0'", true, "2.0.0")]
+    [TestCase("Merge branch 'Releases/0.2.0'", false, "0.2.0")] // Support Squash Commits
     public void TakesVersionFromMergeOfReleaseBranch(string message, bool isMergeCommit, string expectedVersion)
     {
         var parents = GetParents(isMergeCommit);
@@ -76,14 +73,7 @@ public class MergeMessageBaseVersionStrategyTests : TestBase
     [TestCase("Merge branch '4.0.3'", true)]
     [TestCase("Merge branch 's'", true)]
     [TestCase("Merge tag '10.10.50'", true)]
-    [TestCase("Merge branch 'hotfix-4.6.6' into support-4.6", true)]
-    [TestCase("Merge branch 'hotfix-10.10.50'", true)]
-    [TestCase("Merge branch 'Hotfix-10.10.50'", true)]
-    [TestCase("Merge branch 'Hotfix/10.10.50'", true)]
-    [TestCase("Merge branch 'hotfix-0.1.5'", true)]
-    [TestCase("Merge branch 'hotfix-4.2.2' into support-4.2", true)]
     [TestCase("Merge branch 'somebranch' into release-3.0.0", true)]
-    [TestCase("Merge branch 'hotfix-0.1.5'\n\nRelates to: TicketId", true)]
     [TestCase("Merge branch 'alpha-0.1.5'", true)]
     [TestCase("Merge pull request #95 from Particular/issue-94", false)]
     [TestCase("Merge pull request #95 in Particular/issue-94", true)]
@@ -94,20 +84,25 @@ public class MergeMessageBaseVersionStrategyTests : TestBase
     [TestCase("Finish 0.14.1", true)] // Don't support Syntevo SmartGit/Hg's Gitflow merge commit messages for finishing a 'Hotfix' branch
     public void ShouldNotTakeVersionFromMergeOfNonReleaseBranch(string message, bool isMergeCommit)
     {
+        var configurationBuilder = GitFlowConfigurationBuilder.New;
+        configurationBuilder.WithBranch("hotfix", builder => builder.WithIsReleaseBranch(false));
+        ConfigurationHelper configurationHelper = new(configurationBuilder.Build());
+        var configurationDictionary = configurationHelper.Dictionary;
+
         var parents = GetParents(isMergeCommit);
-        AssertMergeMessage(message, null, parents);
-        AssertMergeMessage(message + " ", null, parents);
-        AssertMergeMessage(message + "\r ", null, parents);
-        AssertMergeMessage(message + "\r", null, parents);
-        AssertMergeMessage(message + "\r\n", null, parents);
-        AssertMergeMessage(message + "\r\n ", null, parents);
-        AssertMergeMessage(message + "\n", null, parents);
-        AssertMergeMessage(message + "\n ", null, parents);
+        AssertMergeMessage(message, null, parents, configurationDictionary);
+        AssertMergeMessage(message + " ", null, parents, configurationDictionary);
+        AssertMergeMessage(message + "\r ", null, parents, configurationDictionary);
+        AssertMergeMessage(message + "\r", null, parents, configurationDictionary);
+        AssertMergeMessage(message + "\r\n", null, parents, configurationDictionary);
+        AssertMergeMessage(message + "\r\n ", null, parents, configurationDictionary);
+        AssertMergeMessage(message + "\n", null, parents, configurationDictionary);
+        AssertMergeMessage(message + "\n ", null, parents, configurationDictionary);
     }
 
-    [TestCase("Merge pull request #165 from Particular/release-1.0.0", true)]
-    [TestCase("Merge pull request #165 in Particular/release-1.0.0", true)]
-    [TestCase("Merge pull request #500 in FOO/bar from Particular/release-1.0.0 to develop)", true)]
+    [TestCase("Merge pull request #165 from organization/Particular/release-1.0.0", true)]
+    [TestCase("Merge pull request #165 in organization/Particular/release-1.0.0", true)]
+    [TestCase("Merge pull request #500 in FOO/bar from organization/Particular/release-1.0.0 to develop)", true)]
     public void ShouldNotTakeVersionFromMergeOfReleaseBranchWithRemoteOtherThanOrigin(string message, bool isMergeCommit)
     {
         var parents = GetParents(isMergeCommit);
@@ -144,16 +139,20 @@ public class MergeMessageBaseVersionStrategyTests : TestBase
     [TestCase("Merge branch 'support/0.2.0'", "support", "0.2.0")]
     [TestCase("Merge branch 'support/0.2.0'", null, null)]
     [TestCase("Merge branch 'release/2.0.0'", null, "2.0.0")]
-    public void TakesVersionFromMergeOfConfiguredReleaseBranch(string message, string? releaseBranch, string expectedVersion)
+    public void TakesVersionFromMergeOfConfiguredReleaseBranch(string message, string? releaseBranch, string? expectedVersion)
     {
-        var configuration = new GitVersionConfiguration();
-        if (releaseBranch != null) configuration.Branches[releaseBranch] = new BranchConfiguration { IsReleaseBranch = true };
+        var configurationBuilder = GitFlowConfigurationBuilder.New;
+        if (releaseBranch != null)
+        {
+            configurationBuilder.WithBranch(releaseBranch, builder => builder.WithIsReleaseBranch(true));
+        }
+        ConfigurationHelper configurationHelper = new(configurationBuilder.Build());
         var parents = GetParents(true);
 
-        AssertMergeMessage(message, expectedVersion, parents, configuration);
+        AssertMergeMessage(message, expectedVersion, parents, configurationHelper.Dictionary);
     }
 
-    private static void AssertMergeMessage(string message, string? expectedVersion, IEnumerable<ICommit?> parents, GitVersionConfiguration? configuration = null)
+    private static void AssertMergeMessage(string message, string? expectedVersion, IEnumerable<ICommit?> parents, IReadOnlyDictionary<object, object?>? configuration = null)
     {
         var commit = GitToolsTestingExtensions.CreateMockCommit();
         commit.Message.Returns(message);
@@ -165,15 +164,16 @@ public class MergeMessageBaseVersionStrategyTests : TestBase
         mockRepository.Head.Returns(mockBranch);
         mockRepository.Commits.Returns(mockBranch.Commits);
 
-        var contextBuilder = new GitVersionContextBuilder()
-            .WithConfig(configuration ?? new GitVersionConfiguration()).WithRepository(mockRepository);
+        using var contextBuilder = new GitVersionContextBuilder()
+            .WithOverrideConfiguration(configuration)
+            .WithRepository(mockRepository);
         contextBuilder.Build();
         contextBuilder.ServicesProvider.ShouldNotBeNull();
         var strategy = contextBuilder.ServicesProvider.GetServiceForType<IVersionStrategy, MergeMessageVersionStrategy>();
         var context = contextBuilder.ServicesProvider.GetRequiredService<Lazy<GitVersionContext>>().Value;
-        var branchConfiguration = context.Configuration.GetBranchConfiguration(mockBranch);
-        var effectiveConfiguration = new EffectiveConfiguration(context.Configuration, branchConfiguration);
-        var baseVersion = strategy.GetBaseVersions(new(mockBranch, effectiveConfiguration)).SingleOrDefault();
+
+        strategy.ShouldNotBeNull();
+        var baseVersion = strategy.GetBaseVersions(context.Configuration.GetEffectiveBranchConfiguration(mockBranch)).SingleOrDefault();
 
         if (expectedVersion == null)
         {
@@ -188,8 +188,8 @@ public class MergeMessageBaseVersionStrategyTests : TestBase
 
     private static List<ICommit> GetParents(bool isMergeCommit) =>
         isMergeCommit
-            ? new List<ICommit> { new MockCommit(), new MockCommit() }
-            : new List<ICommit> { new MockCommit(), };
+            ? [new MockCommit(), new MockCommit()]
+            : [new MockCommit()];
 
     private class MockCommit : ICommit
     {
@@ -199,7 +199,7 @@ public class MergeMessageBaseVersionStrategyTests : TestBase
         public int CompareTo(IGitObject? other) => throw new NotImplementedException();
         public IObjectId Id => throw new NotImplementedException();
         public string Sha => throw new NotImplementedException();
-        public IEnumerable<ICommit> Parents => throw new NotImplementedException();
+        public IReadOnlyList<ICommit> Parents => throw new NotImplementedException();
         public DateTimeOffset When => throw new NotImplementedException();
         public string Message => throw new NotImplementedException();
     }

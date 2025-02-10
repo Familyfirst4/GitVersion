@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    </PropertyGroup>
+    <ItemGroup>
+        <PackageReference Include="LibGit2Sharp" />
+    </ItemGroup>
+    <ItemGroup>
+        <Compile Include="..\GitVersion.Core\Helpers\PathHelper.cs" Link="Helpers\PathHelper.cs" />
+    </ItemGroup>
+</Project>

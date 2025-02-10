@@ -1,5 +1,5 @@
 ---
-Order: 35
+Order: 40
 Title: BitBucket Pipelines
 Description: Details on the Atlassian BitBucket Pipelines support in GitVersion
 ---
@@ -16,7 +16,7 @@ in your build step.
 An example pipeline is shown below:
 
 ```yml
-image: mcr.microsoft.com/dotnet/sdk:6.0
+image: mcr.microsoft.com/dotnet/sdk:8.0
 
 clone:
   depth: full
@@ -27,8 +27,8 @@ pipelines:
       name: Version and build
       script:
         - export PATH="$PATH:/root/.dotnet/tools"
-        - dotnet tool install --global GitVersion.Tool --version 5.*
-        - dotnet-gitversion /buildserver
+        - dotnet tool install --global GitVersion.Tool
+        - dotnet-gitversion /output buildserver
         - source gitversion.properties
         - echo Building with semver $GITVERSION_FULLSEMVER
         - dotnet build
@@ -38,10 +38,10 @@ pipelines:
 **Important**
 
 You must set the `clone:depth` setting as shown above; without it, BitBucket Pipelines will perform a shallow clone, which will
-cause GitVersion will display an error message.
+cause GitVersion to display an error message.
 :::
 
-When the action `dotnet-gitversion /buildserver` is executed, it will detect that it is running in BitBucket Pipelines by the presence of
+When the action `dotnet-gitversion /output buildserver` is executed, it will detect that it is running in BitBucket Pipelines by the presence of
 the `BITBUCKET_WORKSPACE` environment variable, which is set by the BitBucket Pipelines engine. It will generate a text file named `gitversion.properties`
 which contains all the output of the GitVersion tool, exported as individual environment variables prefixed with `GITVERSION_`.
 These environment variables can then be imported back into the build step using the `source gitversion.properties` action.
@@ -50,7 +50,7 @@ If you want to share the text file across multiple build steps, then you will ne
 is shown below:
 
 ```yml
-image: mcr.microsoft.com/dotnet/sdk:6.0
+image: mcr.microsoft.com/dotnet/sdk:8.0
 
 clone:
   depth: full
@@ -61,8 +61,8 @@ pipelines:
       name: Version
       script:
         - export PATH="$PATH:/root/.dotnet/tools"
-        - dotnet tool install --global GitVersion.Tool --version 5.*
-        - dotnet-gitversion /buildserver
+        - dotnet tool install --global GitVersion.Tool
+        - dotnet-gitversion /output buildserver
       artifacts:
         - gitversion.properties
     - step:

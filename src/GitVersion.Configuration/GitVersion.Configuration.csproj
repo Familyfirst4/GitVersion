@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    
+    <PropertyGroup>
+        <DefineConstants>GITVERSION_CONFIGURATION</DefineConstants>
+    </PropertyGroup>
+    
+    <ItemGroup>
+        <ProjectReference Include="..\GitVersion.Core\GitVersion.Core.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="YamlDotNet" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <InternalsVisibleTo Include="schema" />
+        <InternalsVisibleTo Include="gitversion" />
+        <InternalsVisibleTo Include="GitVersion.App" />
+        <InternalsVisibleTo Include="GitVersion.LibGit2Sharp" />
+        <InternalsVisibleTo Include="GitVersion.MsBuild" />
+        <InternalsVisibleTo Include="GitVersion.Output" />
+
+        <InternalsVisibleTo Include="GitVersion.BuildAgents.Tests" />
+        <InternalsVisibleTo Include="GitVersion.Core.Tests" />
+        <InternalsVisibleTo Include="GitVersion.Configuration.Tests" />
+        <InternalsVisibleTo Include="GitVersion.Output.Tests" />
+        <InternalsVisibleTo Include="GitVersion.App.Tests" />
+        <InternalsVisibleTo Include="GitVersion.MsBuild.Tests" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <Folder Include="Workflows\*\" />
+      <EmbeddedResource Include="..\..\docs\input\docs\workflows\**\*.yml" Link="Workflows\%(RecursiveDir)\%(Filename)%(Extension)" />
+    </ItemGroup>
+</Project>

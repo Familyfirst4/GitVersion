@@ -1,27 +1,21 @@
 using System.Globalization;
-using System.Text.RegularExpressions;
+using GitVersion.Core;
+using GitVersion.Helpers;
 
 namespace GitVersion.Logging;
 
-public sealed class Log : ILog
+internal sealed class Log(params ILogAppender[] appenders) : ILog
 {
-    private IEnumerable<ILogAppender> appenders;
-    private readonly Regex obscurePasswordRegex = new("(https?://)(.+)(:.+@)", RegexOptions.Compiled);
-    private readonly StringBuilder sb;
-    private string indent = string.Empty;
+    private IEnumerable<ILogAppender> appenders = appenders;
+    private readonly StringBuilder sb = new();
+    private string currentIndentation = string.Empty;
+    private const string Indentation = "  ";
 
-    public Log() : this(Array.Empty<ILogAppender>())
+    public Log() : this([])
     {
     }
 
-    public Log(params ILogAppender[] appenders)
-    {
-        this.appenders = appenders;
-        this.sb = new StringBuilder();
-        Verbosity = Verbosity.Normal;
-    }
-
-    public Verbosity Verbosity { get; set; }
+    public Verbosity Verbosity { get; set; } = Verbosity.Normal;
 
     public void Write(Verbosity verbosity, LogLevel level, string format, params object[] args)
     {
@@ -30,7 +24,7 @@ public sealed class Log : ILog
             return;
         }
 
-        var message = args.Any() ? string.Format(format, args) : format;
+        var message = args.Length != 0 ? string.Format(format, args) : format;
         var formattedString = FormatMessage(message, level.ToString().ToUpperInvariant());
         foreach (var appender in this.appenders)
         {
@@ -42,25 +36,30 @@ public sealed class Log : ILog
 
     public IDisposable IndentLog(string operationDescription)
     {
-        var start = DateTime.Now;
-        Write(Verbosity.Normal, LogLevel.Info, $"Begin: {operationDescription}");
-        this.indent += "  ";
+        var start = TimeProvider.System.GetTimestamp();
+        Write(Verbosity.Normal, LogLevel.Info, $"-< Begin: {operationDescription} >-");
+        this.currentIndentation += Indentation;
 
         return Disposable.Create(() =>
         {
-            var length = this.indent.Length - 2;
-            this.indent = length > 0 ? this.indent.Substring(0, length) : this.indent;
-            Write(Verbosity.Normal, LogLevel.Info, string.Format(CultureInfo.InvariantCulture, "End: {0} (Took: {1:N}ms)", operationDescription, DateTime.Now.Subtract(start).TotalMilliseconds));
+            var length = this.currentIndentation.Length - Indentation.Length;
+            this.currentIndentation = length > 0 ? this.currentIndentation[..length] : "";
+            var end = TimeProvider.System.GetTimestamp();
+            var duration = TimeProvider.System.GetElapsedTime(start, end).TotalMilliseconds;
+            Write(Verbosity.Normal, LogLevel.Info, string.Format(CultureInfo.InvariantCulture, "-< End: {0} (Took: {1:N}ms) >-", operationDescription, duration));
         });
     }
 
-    public void AddLogAppender(ILogAppender logAppender) => this.appenders = this.appenders.Concat(new[] { logAppender });
+    public void Separator() => Write(Verbosity.Normal, LogLevel.Info, "-------------------------------------------------------");
+
+    public void AddLogAppender(ILogAppender logAppender) => this.appenders = this.appenders.Concat([logAppender]);
 
     public override string ToString() => this.sb.ToString();
 
     private string FormatMessage(string message, string level)
     {
-        var obscuredMessage = this.obscurePasswordRegex.Replace(message, "$1$2:*******@");
-        return string.Format(CultureInfo.InvariantCulture, "{0}{1} [{2:MM/dd/yy H:mm:ss:ff}] {3}", this.indent, level, DateTime.Now, obscuredMessage);
+        var obscuredMessage = RegexPatterns.Common.ObscurePasswordRegex.Replace(message, "$1$2:*******@");
+        var timestamp = $"{DateTime.Now:yy-MM-dd H:mm:ss:ff}";
+        return string.Format(CultureInfo.InvariantCulture, "{0}{1} [{2}] {3}", this.currentIndentation, level, timestamp, obscuredMessage);
     }
 }

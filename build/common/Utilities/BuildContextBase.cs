@@ -2,13 +2,12 @@ namespace Common.Utilities;
 
 public class BuildContextBase : FrostingContext
 {
-    protected BuildContextBase(ICakeContext context) : base(context)
-    {
-    }
+    protected BuildContextBase(ICakeContext context) : base(context) => Platform = context.Environment.Platform.Family;
+    public PlatformFamily Platform { get; set; }
     public BuildVersion? Version { get; set; }
-
     public bool IsOriginalRepo { get; set; }
     public string BranchName { get; set; } = string.Empty;
+    public string RepositoryName { get; set; } = string.Empty;
     public bool IsMainBranch { get; set; }
     public bool IsSupportBranch { get; set; }
     public bool IsPullRequest { get; set; }
@@ -19,7 +18,8 @@ public class BuildContextBase : FrostingContext
     public bool IsOnWindows { get; set; }
     public bool IsOnLinux { get; set; }
     public bool IsOnMacOS { get; set; }
-    public bool IsOnMainOrSupportBranchOriginalRepo => !IsLocalBuild && IsOriginalRepo && (IsMainBranch || IsSupportBranch) && !IsPullRequest;
-    public bool IsStableRelease => IsOnMainOrSupportBranchOriginalRepo && IsTagged;
-    public bool IsPreRelease => IsOnMainOrSupportBranchOriginalRepo && !IsTagged;
+    public bool IsReleaseBranchOriginalRepo => !IsLocalBuild && IsOriginalRepo && (IsMainBranch || IsSupportBranch) && !IsPullRequest;
+    public bool IsStableRelease => IsReleaseBranchOriginalRepo && IsTagged && Version?.IsPreRelease == false;
+    public bool IsTaggedPreRelease => IsReleaseBranchOriginalRepo && IsTagged && Version?.IsPreRelease == true;
+    public bool IsInternalPreRelease => IsReleaseBranchOriginalRepo && IsGitHubActionsBuild;
 }

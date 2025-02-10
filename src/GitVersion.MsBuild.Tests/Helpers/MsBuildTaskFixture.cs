@@ -1,17 +1,13 @@
-using GitTools.Testing;
-using GitVersion.BuildAgents;
+using GitVersion.Agents;
 using GitVersion.Core.Tests;
 using GitVersion.Helpers;
 using GitVersion.MsBuild.Tests.Mocks;
 
 namespace GitVersion.MsBuild.Tests.Helpers;
 
-public class MsBuildTaskFixture
+public class MsBuildTaskFixture(RepositoryFixtureBase fixture)
 {
-    private readonly RepositoryFixtureBase fixture;
     private KeyValuePair<string, string?>[]? environmentVariables;
-
-    public MsBuildTaskFixture(RepositoryFixtureBase fixture) => this.fixture = fixture;
 
     public void WithEnv(params KeyValuePair<string, string?>[] envs) => this.environmentVariables = envs;
 
@@ -23,13 +19,13 @@ public class MsBuildTaskFixture
             task.BuildEngine = buildEngine;
 
             var versionFile = PathHelper.Combine(task.SolutionDirectory, "gitversion.json");
-            this.fixture.WriteVersionVariables(versionFile);
+            fixture.WriteVersionVariables(versionFile);
 
             task.VersionFile = versionFile;
 
             var result = task.Execute();
 
-            return new MsBuildTaskFixtureResult<T>(this.fixture)
+            return new MsBuildTaskFixtureResult<T>(fixture)
             {
                 Success = result,
                 Task = task,
@@ -68,7 +64,7 @@ public class MsBuildTaskFixture
             { SpaceAutomation.EnvironmentVariableName, null }
         };
 
-        SetEnvironmentVariables(environmentalVariables.ToArray());
+        SetEnvironmentVariables([.. environmentalVariables]);
     }
 
     private static void SetEnvironmentVariables(KeyValuePair<string, string?>[]? envs)
@@ -76,7 +72,7 @@ public class MsBuildTaskFixture
         if (envs == null) return;
         foreach (var (key, value) in envs)
         {
-            System.Environment.SetEnvironmentVariable(key, value);
+            SysEnv.SetEnvironmentVariable(key, value);
         }
     }
 }

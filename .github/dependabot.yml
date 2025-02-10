@@ -1,30 +1,65 @@
 version: 2
 updates:
+- package-ecosystem: dotnet-sdk
+  labels:
+      - "dependencies"
+  commit-message:
+      prefix: "(deps)"
+  directory: "/"
+  schedule:
+    interval: daily
 - package-ecosystem: nuget
   labels:
     - "dependencies"
   commit-message:
     prefix: "(deps)"
-  directory: "/"
+  groups:
+    microsoft:
+      patterns:
+      - "Microsoft.*"
+      - "System.*"
+    analyzers:
+      patterns:
+      - "*Analyzers"
+    serilog:
+        patterns:
+        - "Serilog.*"
+    nunit:
+      patterns:
+      - "NUnit.*"
+    LibGit2Sharp:
+      patterns:
+      - "LibGit2Sharp.*"
+  directories:
+    - "/build"
+    - "/new-cli"
+    - "/src"
   schedule:
     interval: daily
   open-pull-requests-limit: 10
-  ignore:
-    - dependency-name: "Microsoft.Build"
-      versions: ["16.9.0", "16.11.0"]
+
 - package-ecosystem: github-actions
   labels:
     - "dependencies"
   commit-message:
     prefix: "(build deps)"
+  groups:
+    actions:
+      patterns:
+      - "actions/*"    
   directory: "/"
   schedule:
     interval: daily
+    
 - package-ecosystem: npm
   labels:
     - "dependencies"
   commit-message:
     prefix: "(docs deps)"
+  groups:
+    remark:
+      patterns:
+      - "remark*"
   directory: "/"
   schedule:
-    interval: daily
+    interval: monthly

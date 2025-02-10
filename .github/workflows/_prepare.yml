@@ -1,0 +1,67 @@
+on:
+  workflow_call:
+    outputs:
+      docker_distros:
+        description: 'List of Docker distros'
+        value: ${{ jobs.set_matrix.outputs.docker_distros }}
+      dotnet_versions:
+        description: 'List of .NET versions'
+        value: ${{ jobs.set_matrix.outputs.dotnet_versions }}
+jobs:
+  prepare:
+    name: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2025, ubuntu-24.04, macos-15]
+
+    runs-on: ${{ matrix.os }}
+    steps:
+    -
+      name: Checkout
+      uses: actions/checkout@v4
+    -
+      name: Cache cake frosting
+      id: cache-cake
+      uses: actions/cache@v4
+      with:
+        path: run
+        key: run-${{ runner.os }}-${{ hashFiles('./build/**') }}
+    - name: Use cached tools
+      id: cache-tools
+      uses: actions/cache@v4
+      with:
+        path: tools
+        key: tools-${{ runner.os }}-${{ hashFiles('./build/**') }}
+    -
+      name: Setup .NET SDK
+      uses: actions/setup-dotnet@v4
+      with:
+        global-json-file: global.json
+    -
+      name: '[Build]'
+      if: steps.cache-cake.outputs.cache-hit != 'true'
+      run: dotnet build build/CI.sln --configuration=Release
+    -
+      name: '[Prepare]'
+      shell: pwsh
+      run: dotnet run/build.dll --target=BuildPrepare
+  set_matrix:
+    needs: [ prepare ]
+    name: Set Matrix
+    runs-on: ubuntu-24.04
+    outputs:
+      docker_distros: ${{ steps.set_matrix.outputs.docker_distros }}
+      dotnet_versions: ${{ steps.set_matrix.outputs.dotnet_versions }}
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@v4
+      -
+        name: Restore State
+        uses: ./.github/actions/cache-restore
+      -
+        name: '[Matrix]'
+        id: set_matrix
+        shell: pwsh
+        run: dotnet run/config.dll --target=SetMatrix

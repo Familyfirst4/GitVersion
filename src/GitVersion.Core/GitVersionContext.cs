@@ -1,40 +1,31 @@
 using GitVersion.Configuration;
+using GitVersion.Extensions;
+using GitVersion.Git;
 
 namespace GitVersion;
 
 /// <summary>
 /// Contextual information about where GitVersion is being run
 /// </summary>
-public class GitVersionContext
+public class GitVersionContext(
+    IBranch currentBranch,
+    ICommit currentCommit,
+    IGitVersionConfiguration configuration,
+    bool isCurrentCommitTagged,
+    int numberOfUncommittedChanges)
 {
     /// <summary>
     /// Contains the raw configuration, use Configuration for specific configuration based on the current GitVersion context.
     /// </summary>
-    public GitVersionConfiguration Configuration { get; }
+    public IGitVersionConfiguration Configuration { get; } = configuration.NotNull();
 
-    public SemanticVersion? CurrentCommitTaggedVersion { get; }
+    public IBranch CurrentBranch { get; } = currentBranch.NotNull();
 
-    public IBranch CurrentBranch { get; }
+    public IEnumerable<ICommit> CurrentBranchCommits => CurrentBranch.Commits.GetCommitsPriorTo(CurrentCommit.When);
 
-    public ICommit? CurrentCommit { get; }
+    public ICommit CurrentCommit { get; } = currentCommit.NotNull();
 
-    public bool IsCurrentCommitTagged => CurrentCommitTaggedVersion != null;
+    public bool IsCurrentCommitTagged { get; } = isCurrentCommitTagged;
 
-    public int NumberOfUncommittedChanges { get; }
-
-    public GitVersionContext(IBranch currentBranch, ICommit? currentCommit,
-        GitVersionConfiguration configuration, SemanticVersion? currentCommitTaggedVersion, int numberOfUncommittedChanges)
-    {
-        CurrentBranch = currentBranch;
-        CurrentCommit = currentCommit;
-        Configuration = configuration;
-        CurrentCommitTaggedVersion = currentCommitTaggedVersion;
-        NumberOfUncommittedChanges = numberOfUncommittedChanges;
-    }
-
-    public EffectiveConfiguration GetEffectiveConfiguration(IBranch branch)
-    {
-        BranchConfiguration branchConfiguration = Configuration.GetBranchConfiguration(branch);
-        return new EffectiveConfiguration(Configuration, branchConfiguration);
-    }
+    public int NumberOfUncommittedChanges { get; } = numberOfUncommittedChanges;
 }

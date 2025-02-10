@@ -1,20 +1,11 @@
 using GitVersion.Extensions;
-using GitVersion.VersionCalculation;
+using GitVersion.Git;
 
 namespace GitVersion.Configuration;
 
-public class EffectiveBranchConfiguration
+public record EffectiveBranchConfiguration(EffectiveConfiguration Value, IBranch Branch)
 {
-    public IBranch Branch { get; }
+    public IBranch Branch { get; } = Branch.NotNull();
 
-    public EffectiveConfiguration Value { get; }
-
-    public EffectiveBranchConfiguration(IBranch branch, EffectiveConfiguration value)
-    {
-        Branch = branch.NotNull();
-        Value = value.NotNull();
-    }
-
-    public NextVersion CreateNextVersion(BaseVersion baseVersion, SemanticVersion incrementedVersion)
-        => new(incrementedVersion.NotNull(), baseVersion.NotNull(), new(Branch, Value));
+    public EffectiveConfiguration Value { get; } = Value.NotNull();
 }

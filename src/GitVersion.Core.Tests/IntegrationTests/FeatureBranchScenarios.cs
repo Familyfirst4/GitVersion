@@ -1,10 +1,7 @@
-using GitTools.Testing;
 using GitVersion.Configuration;
 using GitVersion.Core.Tests.Helpers;
-using GitVersion.Extensions;
 using GitVersion.VersionCalculation;
 using LibGit2Sharp;
-using NUnit.Framework;
 
 namespace GitVersion.Core.Tests.IntegrationTests;
 
@@ -39,22 +36,13 @@ public class FeatureBranchScenarios : TestBase
     [Test]
     public void BranchCreatedAfterFastForwardMergeShouldInheritCorrectly()
     {
-        var configuration = new GitVersionConfiguration
-        {
-            Branches =
-            {
-                {
-                    "unstable",
-                    new BranchConfiguration
-                    {
-                        Increment = IncrementStrategy.Minor,
-                        Regex = "unstable",
-                        SourceBranches = new HashSet<string>(),
-                        IsSourceBranchFor = new HashSet<string> { "feature" }
-                    }
-                }
-            }
-        };
+        var configuration = GitFlowConfigurationBuilder.New
+            .WithBranch("unstable", builder => builder
+                .WithIncrement(IncrementStrategy.Minor)
+                .WithRegularExpression("unstable")
+                .WithSourceBranches()
+                .WithIsSourceBranchFor("feature"))
+            .Build();
 
         using var fixture = new EmptyRepositoryFixture();
         fixture.Repository.MakeATaggedCommit("1.0.0");
@@ -168,21 +156,20 @@ public class FeatureBranchScenarios : TestBase
         Commands.Checkout(fixture.Repository, branchName);
         fixture.Repository.Merge(fixture.Repository.Branches["develop"], Generate.SignatureNow());
 
-        var configuration = new GitVersionConfiguration { VersioningMode = VersioningMode.ContinuousDeployment };
+        var configuration = GitFlowConfigurationBuilder.New
+            .WithDeploymentMode(DeploymentMode.ContinuousDelivery)
+            .WithBranch("feature", builder => builder.WithDeploymentMode(DeploymentMode.ContinuousDelivery))
+            .Build();
         fixture.AssertFullSemver("1.2.0-longrunning.2", configuration);
     }
 
     [Test]
     public void CanUseBranchNameOffAReleaseBranch()
     {
-        var configuration = new GitVersionConfiguration
-        {
-            Branches =
-            {
-                { "release", new BranchConfiguration { Tag = "build" } },
-                { "feature", new BranchConfiguration { Tag = "useBranchName" } }
-            }
-        };
+        var configuration = GitFlowConfigurationBuilder.New
+            .WithBranch("release", builder => builder.WithLabel("build"))
+            .WithBranch("feature", builder => builder.WithLabel(ConfigurationConstants.BranchNamePlaceholder))
+            .Build();
 
         using var fixture = new EmptyRepositoryFixture();
         fixture.MakeACommit();
@@ -192,30 +179,31 @@ public class FeatureBranchScenarios : TestBase
         fixture.BranchTo("feature/PROJ-1");
         fixture.MakeACommit();
 
-        fixture.AssertFullSemver("0.3.0-PROJ-1.1+3", configuration);
+        fixture.AssertFullSemver("0.3.0-PROJ-1.1+4", configuration);
     }
 
-    [TestCase("alpha", "JIRA-123", "alpha")]
-    [TestCase("useBranchName", "JIRA-123", "JIRA-123")]
-    [TestCase("alpha.{BranchName}", "JIRA-123", "alpha.JIRA-123")]
-    public void ShouldUseConfiguredTag(string tag, string featureName, string preReleaseTagName)
+    [TestCase("alpha", "JIRA-123", @"^features?[\/-](?<BranchName>.+)", "alpha")]
+    [TestCase($"alpha.{ConfigurationConstants.BranchNamePlaceholder}", "JIRA-123", @"^features?[\/-](?<BranchName>.+)", "alpha.JIRA-123")]
+    [TestCase("{BranchName}-of-task-number-{TaskNumber}", "4711_this-is-a-feature", @"^features?[\/-](?<TaskNumber>\d+)_(?<BranchName>.+)", "this-is-a-feature-of-task-number-4711")]
+    [TestCase("{BranchName}", "4711_this-is-a-feature", @"^features?[\/-](?<BranchName>.+)", "4711-this-is-a-feature")]
+    [TestCase("{BranchName}.xyz", "x_y.7.z", @"^features?[\/-](?<BranchName>.+)", "x-y-7-z.xyz")]
+    [TestCase("{BranchName}", "yourname/dash-separated-words", @".*\/(?<BranchName>[^\/]+)$", "dash-separated-words")]
+    [TestCase("{X}.{Z}-{Y}.{X}-{Z}.{X}", "xxxyyz", @"^features?[\/-](?<X>x+)(?<Y>y+)(?<Z>z+)$", "xxx.z-yy.xxx-z.xxx")]
+    public void ShouldUseConfiguredLabel(string label, string featureName, string regularExpression, string preReleaseLabelName)
     {
-        var configuration = new GitVersionConfiguration
-        {
-            Branches =
-            {
-                { "feature", new BranchConfiguration { Tag = tag } }
-            }
-        };
+        var configuration = GitFlowConfigurationBuilder.New
+            .WithBranch("feature", builder => builder
+                .WithLabel(label)
+                .WithRegularExpression(regularExpression))
+            .Build();
 
         using var fixture = new EmptyRepositoryFixture();
-        fixture.Repository.MakeATaggedCommit("1.0.0");
+        fixture.MakeATaggedCommit("1.0.0");
         var featureBranchName = $"feature/{featureName}";
-        fixture.Repository.CreateBranch(featureBranchName);
-        Commands.Checkout(fixture.Repository, featureBranchName);
+        fixture.BranchTo(featureBranchName);
         fixture.Repository.MakeCommits(5);
 
-        var expectedFullSemVer = $"1.0.1-{preReleaseTagName}.1+5";
+        var expectedFullSemVer = $"1.0.1-{preReleaseLabelName}.1+5";
         fixture.AssertFullSemver(expectedFullSemVer, configuration);
     }
 
@@ -229,7 +217,7 @@ public class FeatureBranchScenarios : TestBase
         Commands.Checkout(fixture.Repository, "release/0.2.0");
 
         //validate release version
-        fixture.AssertFullSemver("0.2.0-beta.1+0");
+        fixture.AssertFullSemver("0.2.0-beta.1+1");
 
         fixture.Checkout(MainBranch);
         fixture.Repository.MergeNoFF("release/0.2.0");
@@ -251,7 +239,7 @@ public class FeatureBranchScenarios : TestBase
         fixture.BranchTo("feature/TEST-1");
         fixture.Repository.MakeACommit();
 
-        //I'm not entirely sure what the + value should be but I know the semvar major/minor/patch should be 0.3.0
+        //I'm not entirely sure what the + value should be, but I know the semver major/minor/patch should be 0.3.0
         fixture.AssertFullSemver("0.3.0-TEST-1.1+2");
     }
 
@@ -300,19 +288,9 @@ public class FeatureBranchScenarios : TestBase
         [Test]
         public void ShouldPickUpVersionFromMainAfterReleaseBranchCreated()
         {
-            var configuration = new GitVersionConfiguration
-            {
-                Branches = new Dictionary<string, BranchConfiguration>
-                {
-                    {
-                        MainBranch, new BranchConfiguration
-                        {
-                            TracksReleaseBranches = true,
-                            Regex = MainBranch
-                        }
-                    }
-                }
-            };
+            var configuration = GitFlowConfigurationBuilder.New
+                .WithBranch(MainBranch, builder => builder.WithTracksReleaseBranches(true))
+                .Build();
 
             using var fixture = new EmptyRepositoryFixture();
             // Create release branch
@@ -321,7 +299,7 @@ public class FeatureBranchScenarios : TestBase
             fixture.MakeACommit();
             fixture.Checkout(MainBranch);
             fixture.MakeACommit();
-            fixture.AssertFullSemver("1.0.1+1", configuration);
+            fixture.AssertFullSemver("1.0.1-1", configuration);
 
             // create a feature branch from main and verify the version
             fixture.BranchTo("feature/test");
@@ -331,19 +309,9 @@ public class FeatureBranchScenarios : TestBase
         [Test]
         public void ShouldPickUpVersionFromMainAfterReleaseBranchMergedBack()
         {
-            var configuration = new GitVersionConfiguration
-            {
-                Branches = new Dictionary<string, BranchConfiguration>
-                {
-                    {
-                        MainBranch, new BranchConfiguration
-                        {
-                            TracksReleaseBranches = true,
-                            Regex = MainBranch
-                        }
-                    }
-                }
-            };
+            var configuration = GitFlowConfigurationBuilder.New
+                .WithBranch(MainBranch, builder => builder.WithTracksReleaseBranches(true))
+                .Build();
 
             using var fixture = new EmptyRepositoryFixture();
             // Create release branch
@@ -354,7 +322,7 @@ public class FeatureBranchScenarios : TestBase
             // merge release into main
             fixture.Checkout(MainBranch);
             fixture.MergeNoFF("release/1.0.0");
-            fixture.AssertFullSemver("1.0.1+2", configuration);
+            fixture.AssertFullSemver("1.0.1-2", configuration);
 
             // create a feature branch from main and verify the version
             fixture.BranchTo("feature/test");
@@ -410,19 +378,9 @@ public class FeatureBranchScenarios : TestBase
             [Test]
             public void ShouldPickUpVersionFromMainAfterReleaseBranchCreated()
             {
-                var configuration = new GitVersionConfiguration
-                {
-                    Branches = new Dictionary<string, BranchConfiguration>
-                    {
-                        {
-                            MainBranch, new BranchConfiguration
-                            {
-                                TracksReleaseBranches = true,
-                                Regex = MainBranch
-                            }
-                        }
-                    }
-                };
+                var configuration = GitFlowConfigurationBuilder.New
+                    .WithBranch(MainBranch, builder => builder.WithTracksReleaseBranches(true))
+                    .Build();
 
                 using var fixture = new EmptyRepositoryFixture();
                 // Create release branch
@@ -431,7 +389,7 @@ public class FeatureBranchScenarios : TestBase
                 fixture.MakeACommit();
                 fixture.Checkout(MainBranch);
                 fixture.MakeACommit();
-                fixture.AssertFullSemver("1.0.1+1", configuration);
+                fixture.AssertFullSemver("1.0.1-1", configuration);
 
                 // create a misnamed feature branch (i.e. it uses the default configuration) from main and verify the version
                 fixture.BranchTo("misnamed");
@@ -441,19 +399,9 @@ public class FeatureBranchScenarios : TestBase
             [Test]
             public void ShouldPickUpVersionFromMainAfterReleaseBranchMergedBack()
             {
-                var configuration = new GitVersionConfiguration
-                {
-                    Branches = new Dictionary<string, BranchConfiguration>
-                    {
-                        {
-                            MainBranch, new BranchConfiguration
-                            {
-                                TracksReleaseBranches = true,
-                                Regex = MainBranch
-                            }
-                        }
-                    }
-                };
+                var configuration = GitFlowConfigurationBuilder.New
+                    .WithBranch(MainBranch, builder => builder.WithTracksReleaseBranches(true))
+                    .Build();
 
                 using var fixture = new EmptyRepositoryFixture();
                 // Create release branch
@@ -464,7 +412,7 @@ public class FeatureBranchScenarios : TestBase
                 // merge release into main
                 fixture.Checkout(MainBranch);
                 fixture.MergeNoFF("release/1.0.0");
-                fixture.AssertFullSemver("1.0.1+2", configuration);
+                fixture.AssertFullSemver("1.0.1-2", configuration);
 
                 // create a misnamed feature branch (i.e. it uses the default configuration) from main and verify the version
                 fixture.BranchTo("misnamed");
@@ -476,27 +424,12 @@ public class FeatureBranchScenarios : TestBase
     [Test]
     public void PickUpVersionFromMainMarkedWithIsTracksReleaseBranches()
     {
-        var configuration = new GitVersionConfiguration
-        {
-            VersioningMode = VersioningMode.ContinuousDelivery,
-            Branches = new Dictionary<string, BranchConfiguration>
-            {
-                {
-                    MainBranch, new BranchConfiguration
-                    {
-                        Tag = "pre",
-                        TracksReleaseBranches = true
-                    }
-                },
-                {
-                    "release", new BranchConfiguration
-                    {
-                        IsReleaseBranch = true,
-                        Tag = "rc"
-                    }
-                }
-            }
-        };
+        var configuration = GitFlowConfigurationBuilder.New
+            .WithDeploymentMode(DeploymentMode.ManualDeployment)
+            .WithBranch("unknown", builder => builder.WithIncrement(IncrementStrategy.Patch).WithTracksReleaseBranches(true))
+            .WithBranch(MainBranch, builder => builder.WithLabel("pre").WithTracksReleaseBranches(true))
+            .WithBranch("release", builder => builder.WithLabel("rc"))
+            .Build();
 
         using var fixture = new EmptyRepositoryFixture();
         fixture.MakeACommit();
@@ -505,7 +438,7 @@ public class FeatureBranchScenarios : TestBase
         fixture.BranchTo("release/0.10.0");
         fixture.MakeACommit();
         fixture.MakeACommit();
-        fixture.AssertFullSemver("0.10.0-rc.1+2", configuration);
+        fixture.AssertFullSemver("0.10.0-rc.1+3", configuration);
 
         // switch to main and verify the version
         fixture.Checkout(MainBranch);
@@ -520,28 +453,18 @@ public class FeatureBranchScenarios : TestBase
     [Test]
     public void ShouldHaveAGreaterSemVerAfterDevelopIsMergedIntoFeature()
     {
-        var configuration = new GitVersionConfiguration
-        {
-            VersioningMode = VersioningMode.ContinuousDeployment,
-            AssemblyVersioningScheme = AssemblyVersioningScheme.Major,
-            AssemblyFileVersioningFormat = "{MajorMinorPatch}.{env:WeightedPreReleaseNumber ?? 0}",
-            CommitMessageIncrementing = CommitMessageIncrementMode.Disabled,
-            Branches = new Dictionary<string, BranchConfiguration>
-            {
-                {
-                    "develop", new BranchConfiguration
-                    {
-                        PreventIncrementOfMergedBranchVersion = true
-                    }
-                },
-                {
-                    "feature", new BranchConfiguration
-                    {
-                        Tag = "feat-{BranchName}"
-                    }
-                }
-            }
-        };
+        var configuration = GitFlowConfigurationBuilder.New
+            .WithAssemblyVersioningScheme(AssemblyVersioningScheme.Major)
+            .WithAssemblyFileVersioningFormat("{MajorMinorPatch}.{env:WeightedPreReleaseNumber ?? 0}")
+            .WithBranch("main", builder => builder.WithDeploymentMode(DeploymentMode.ContinuousDelivery))
+            .WithBranch("develop", builder => builder.WithPreventIncrementOfMergedBranch(true))
+            .WithBranch("feature", builder => builder
+                .WithLabel($"feat-{ConfigurationConstants.BranchNamePlaceholder}")
+                .WithDeploymentMode(DeploymentMode.ContinuousDelivery)
+            )
+            .WithCommitMessageIncrementing(CommitMessageIncrementMode.Disabled)
+            .Build();
+
         using var fixture = new EmptyRepositoryFixture();
         fixture.MakeACommit();
         fixture.BranchTo("develop");

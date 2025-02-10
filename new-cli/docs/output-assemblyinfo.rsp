@@ -1,0 +1,1 @@
+output assemblyinfo --input-file version.json --assemblyinfo-file assembly.cs

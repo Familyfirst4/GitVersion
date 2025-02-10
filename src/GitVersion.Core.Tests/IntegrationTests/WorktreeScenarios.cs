@@ -1,9 +1,6 @@
-using GitTools.Testing;
 using GitVersion.Core.Tests.Helpers;
 using GitVersion.Helpers;
 using LibGit2Sharp;
-using NUnit.Framework;
-using Shouldly;
 
 namespace GitVersion.Core.Tests.IntegrationTests;
 
@@ -26,8 +23,7 @@ public class WorktreeScenarios : TestBase
         fixture.AssertFullSemver("2.0.0");
 
         fixture.Repository.Worktrees.Add(branchV1.CanonicalName, "1.0", worktreePath, false);
-        using var worktreeFixture = new LocalRepositoryFixture(new Repository(worktreePath));
+        using var worktreeFixture = new LocalRepositoryFixture(new(worktreePath));
         worktreeFixture.AssertFullSemver("1.0.0");
     }
-
 }

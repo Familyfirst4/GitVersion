@@ -1,19 +1,18 @@
-using GitTools.Testing;
-using GitVersion.Configuration;
 using GitVersion.Core.Tests.Helpers;
 using GitVersion.Extensions;
+using GitVersion.Git;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
-using NSubstitute;
 
 namespace GitVersion.Core.Tests;
 
-public class GitVersionContextBuilder
+public class GitVersionContextBuilder : IDisposable
 {
     private IGitRepository? repository;
-    private GitVersionConfiguration? configuration;
-    public IServiceProvider? ServicesProvider;
+    private EmptyRepositoryFixture? emptyRepositoryFixture;
+    private IReadOnlyDictionary<object, object?>? overrideConfiguration;
     private Action<IServiceCollection>? overrideServices;
+    public IServiceProvider? ServicesProvider;
 
     public GitVersionContextBuilder WithRepository(IGitRepository gitRepository)
     {
@@ -21,9 +20,9 @@ public class GitVersionContextBuilder
         return this;
     }
 
-    public GitVersionContextBuilder WithConfig(GitVersionConfiguration configuration)
+    public GitVersionContextBuilder WithOverrideConfiguration(IReadOnlyDictionary<object, object?>? value)
     {
-        this.configuration = configuration;
+        this.overrideConfiguration = value;
         return this;
     }
 
@@ -50,7 +49,7 @@ public class GitVersionContextBuilder
 
         var branches = this.repository.Branches.ToList();
         branches.Add(mockBranch);
-        this.repository.Branches.GetEnumerator().Returns(_ => ((IEnumerable<IBranch>)branches).GetEnumerator());
+        this.repository.Branches.MockCollectionReturn([.. branches]);
         this.repository.Head.Returns(mockBranch);
         return this;
     }
@@ -59,15 +58,8 @@ public class GitVersionContextBuilder
     {
         var repo = this.repository ?? CreateRepository();
 
-        var configuration = new ConfigurationBuilder()
-            .Add(this.configuration ?? new GitVersionConfiguration())
-            .Build();
-
-        var options = Options.Create(new GitVersionOptions
-        {
-            WorkingDirectory = new EmptyRepositoryFixture().RepositoryPath,
-            ConfigInfo = { OverrideConfig = configuration }
-        });
+        emptyRepositoryFixture = new();
+        var options = Options.Create(new GitVersionOptions { WorkingDirectory = emptyRepositoryFixture.RepositoryPath, ConfigurationInfo = { OverrideConfiguration = this.overrideConfiguration } });
 
         this.ServicesProvider = ConfigureServices(services =>
         {
@@ -82,7 +74,7 @@ public class GitVersionContextBuilder
         var mockCommit = GitToolsTestingExtensions.CreateMockCommit();
         var mockBranch = GitToolsTestingExtensions.CreateMockBranch(TestBase.MainBranch, mockCommit);
         var branches = Substitute.For<IBranchCollection>();
-        branches.GetEnumerator().Returns(_ => ((IEnumerable<IBranch>)new[] { mockBranch }).GetEnumerator());
+        branches.MockCollectionReturn(mockBranch);
 
         var mockRepository = Substitute.For<IGitRepository>();
         mockRepository.Branches.Returns(branches);
@@ -100,5 +92,22 @@ public class GitVersionContextBuilder
         overrideServices?.Invoke(services);
 
         return services.BuildServiceProvider();
+    }
+
+    public void Dispose()
+    {
+        Dispose(true);
+        GC.SuppressFinalize(this);
+    }
+
+    private void Dispose(bool disposing)
+    {
+        if (!disposing)
+        {
+            return;
+        }
+
+        this.repository?.Dispose();
+        this.emptyRepositoryFixture?.Dispose();
     }
 }

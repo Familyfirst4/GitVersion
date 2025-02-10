@@ -1,9 +1,10 @@
-using GitTools.Testing;
-using GitVersion.BuildAgents;
+using GitVersion.Agents;
 using GitVersion.Core.Tests.Helpers;
+using GitVersion.Extensions;
+using GitVersion.Git;
+using GitVersion.Helpers;
+using GitVersion.Output;
 using LibGit2Sharp;
-using NUnit.Framework;
-using Shouldly;
 
 namespace GitVersion.App.Tests;
 
@@ -12,13 +13,13 @@ public class PullRequestInBuildAgentTest
 {
     private const string PullRequestBranchName = "PR-5";
     private static readonly string[] PrMergeRefs =
-    {
+    [
         "refs/pull-requests/5/merge",
         "refs/pull/5/merge",
         "refs/heads/pull/5/head",
         "refs/remotes/pull/5/merge",
         "refs/remotes/pull-requests/5/merge"
-    };
+    ];
 
     [TestCaseSource(nameof(PrMergeRefs))]
     public async Task VerifyAzurePipelinesPullRequest(string pullRequestRef)
@@ -132,7 +133,6 @@ public class PullRequestInBuildAgentTest
     [TestCaseSource(nameof(PrMergeRefs))]
     public async Task VerifyBitBucketPipelinesPullRequest(string pullRequestRef)
     {
-
         var env = new Dictionary<string, string>
         {
             { BitBucketPipelines.EnvironmentVariableName, "MyWorkspace" },
@@ -143,9 +143,9 @@ public class PullRequestInBuildAgentTest
 
     private static async Task VerifyPullRequestVersionIsCalculatedProperly(string pullRequestRef, Dictionary<string, string> env)
     {
-        using var fixture = new EmptyRepositoryFixture("main");
-        var remoteRepositoryPath = ExecutableHelper.GetTempPath();
-        RepositoryFixtureBase.Init(remoteRepositoryPath, "main");
+        using var fixture = new EmptyRepositoryFixture();
+        var remoteRepositoryPath = PathHelper.GetRepositoryTempPath();
+        RepositoryFixtureBase.Init(remoteRepositoryPath);
         using (var remoteRepository = new Repository(remoteRepositoryPath))
         {
             remoteRepository.Config.Set("user.name", "Test");
@@ -164,16 +164,22 @@ public class PullRequestInBuildAgentTest
             remoteRepository.Refs.Add(pullRequestRef, new ObjectId(mergeCommitSha));
 
             // Checkout PR commit
-            Commands.Fetch((Repository)fixture.Repository, "origin", Array.Empty<string>(), new FetchOptions(), null);
+            Commands.Fetch(fixture.Repository, "origin", [], new FetchOptions(), null);
             Commands.Checkout(fixture.Repository, mergeCommitSha);
         }
 
         var programFixture = new ProgramFixture(fixture.RepositoryPath);
-        programFixture.WithEnv(env.ToArray());
+        programFixture.WithOverrides(services =>
+        {
+            services.AddModule(new GitVersionBuildAgentsModule());
+            services.AddModule(new GitVersionOutputModule());
+        });
+        programFixture.WithEnv([.. env]);
 
         var result = await programFixture.Run();
 
         result.ExitCode.ShouldBe(0);
+        result.Output.ShouldNotBeNull();
         result.OutputVariables.ShouldNotBeNull();
         result.OutputVariables.FullSemVer.ShouldBe("1.0.4-PullRequest5.3");
 
@@ -182,21 +188,23 @@ public class PullRequestInBuildAgentTest
     }
 
     private static readonly object[] PrMergeRefInputs =
-    {
+    [
         new object[] { "refs/pull-requests/5/merge", "refs/pull-requests/5/merge", false, true, false },
-        new object[] { "refs/pull/5/merge", "refs/pull/5/merge", false, true, false},
+        new object[] { "refs/pull/5/merge", "refs/pull/5/merge", false, true, false },
         new object[] { "refs/heads/pull/5/head", "pull/5/head", true, false, false },
-        new object[] { "refs/remotes/pull/5/merge", "pull/5/merge", false, true, true },
-    };
+        new object[] { "refs/remotes/pull/5/merge", "pull/5/merge", false, true, true }
+    ];
 
     [TestCaseSource(nameof(PrMergeRefInputs))]
     public void VerifyPullRequestInput(string pullRequestRef, string friendly, bool isBranch, bool isPullRequest, bool isRemote)
     {
         var refName = new ReferenceName(pullRequestRef);
-
-        Assert.AreEqual(friendly, refName.Friendly);
-        Assert.AreEqual(isBranch, refName.IsBranch);
-        Assert.AreEqual(isPullRequest, refName.IsPullRequest);
-        Assert.AreEqual(isRemote, refName.IsRemoteBranch);
+        Assert.Multiple(() =>
+        {
+            Assert.That(refName.Friendly, Is.EqualTo(friendly));
+            Assert.That(refName.IsLocalBranch, Is.EqualTo(isBranch));
+            Assert.That(refName.IsPullRequest, Is.EqualTo(isPullRequest));
+            Assert.That(refName.IsRemoteBranch, Is.EqualTo(isRemote));
+        });
     }
 }

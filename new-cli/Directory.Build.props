@@ -1,0 +1,40 @@
+<Project>
+    <PropertyGroup>
+        <TargetFramework>net9.0</TargetFramework>
+        <RootNamespace>GitVersion</RootNamespace>
+
+        <LangVersion>latest</LangVersion>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <NoWarn>8625;2254;IDE0005</NoWarn>
+
+        <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+        <EnableNETAnalyzers>true</EnableNETAnalyzers>
+        <AnalysisLevel>latest</AnalysisLevel>
+        <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Roslynator.Analyzers">
+            <PrivateAssets>all</PrivateAssets>
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
+        <PackageReference Include="Roslynator.Formatting.Analyzers">
+            <PrivateAssets>all</PrivateAssets>
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
+    </ItemGroup>
+
+    <ItemGroup>
+        <Using Include="System.Collections"/>
+        <Using Include="System.Collections.Specialized"/>
+        <Using Include="System.Diagnostics"/>
+        <Using Include="System.Reflection"/>
+        <Using Include="System.Text"/>
+        <Using Include="System.Text.Json"/>
+        <Using Include="System.Text.Json.Serialization"/>
+        <Using Include="System.Xml"/>
+        <Using Include="System.Environment" Alias="SysEnv"/>
+    </ItemGroup>
+
+</Project>

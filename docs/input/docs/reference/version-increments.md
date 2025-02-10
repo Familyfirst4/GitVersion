@@ -83,11 +83,6 @@ If the incrementing `mode` is set to `MergeMessageOnly` you can add this
 information when merging a pull request. This prevents commits within a PR to
 bump the version number.
 
-One thing to be aware of: If the current version is an alpha-version (i.e.
-`0.x.y`.), attempting to bump the major version will merely bump the minor (eg
-from `0.2.0` to `0.3.0` instead of `1.0.0`). Once the current version is greater
-than `1.0.0`, bumping the major version works as expected.
-
 #### Conventional commit messages
 
 If you want to use the [Conventional Commits][conventional-commits] standard,
@@ -95,13 +90,24 @@ you can leverage this feature as follows:
 
 ```yaml
 mode: MainLine # Only add this if you want every version to be created automatically on your main branch.
-major-version-bump-message: "^(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test)(\\([\\w\\s-]*\\))?(!:|:.*\\n\\n((.+\\n)+\\n)?BREAKING CHANGE:\\s.+)"
-minor-version-bump-message: "^(feat)(\\([\\w\\s-]*\\))?:"
-patch-version-bump-message: "^(build|chore|ci|docs|fix|perf|refactor|revert|style|test)(\\([\\w\\s-]*\\))?:"
+major-version-bump-message: "^(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test)(\\([\\w\\s-,/\\\\]*\\))?(!:|:.*\\n\\n((.+\\n)+\\n)?BREAKING CHANGE:\\s.+)"
+minor-version-bump-message: "^(feat)(\\([\\w\\s-,/\\\\]*\\))?:"
+patch-version-bump-message: "^(fix|perf)(\\([\\w\\s-,/\\\\]*\\))?:"
 ```
 
 This will ensure that your version gets bumped according to the commits you've
 created.
+
+If your CI/CD workflow uses semantic-release's commit-analyzer, change
+`(fix|perf)` to `(fix|perf|revert)`.
+[Why?](https://github.com/semantic-release/commit-analyzer/blob/75c9c87c88772d7ded4ca9614852b42519e41931/lib/default-release-rules.js#L8C1-L8C38)
+
+Alternatively, you can override this rule in the
+[configuration](https://github.com/semantic-release/commit-analyzer/tree/master#usage)
+of @semantic-release/commit-analyzer. If you intend to write rules with
+patterns, note that instead of using Regular Expression,
+@semantic-release/commit-analyzer uses
+[micromatch's glob implementation](https://github.com/micromatch/micromatch#matching-features).
 
 ### GitVersion.yml
 
@@ -115,17 +121,28 @@ If you create a branch with the version number in the branch name, such as
 from the branch name as a source. However, GitVersion can't use the [branch
 name as a version source for _other branches_][faq-branch-name-source].
 
+### Detached HEAD
+
+If HEAD is in detached state tag will be `-no-branch-`.
+
+Example: `0.0.1--no-branch-.1+4`
+
 ### Tagging commit
 
 By tagging a commit, GitVersion will use that tag for the version of that
 commit, then increment the next commit automatically based on the increment
 rules for that branch (some branches bump patch, some minor).
 
+Be aware that tags are local to a repository and will not be transferred when
+you perform a default `git push`. Instead, tags can be pushed separately with
+their own command. For more information, read the [git documentation on
+tagging][git-tagging].
+
 ### Incrementing per commit
 
-When using the continuous deployment `mode` (which will increment the SemVer every
-commit) all builds _must_ have a pre-release tag, except for builds that are
-explicitly tagged as stable.
+When using the continuous deployment `mode` (which will increment the SemVer
+every commit) all builds _must_ have a pre-release tag, except for builds that
+are explicitly tagged as stable.
 
 Then the build metadata (which is the commit count) is promoted to the
 pre-release tag. Applying these rules, the above commit-graph would produce:
@@ -143,12 +160,18 @@ b5d142 -> 2.0.0-ci.0 (2.0.0 branch was merged, so main is now at 2.0.0)
 
 As you can see, the versions now no longer conflict. When you want to create a
 stable `2.0.0` release you simply `git tag 2.0.0`, then build the tag, and it
-will produce a stable `2.0.0` package.
+will produce a stable `2.0.0` package. Be aware that
+[tags are not transferred with `git push`](#tagging-commit)
 
 For more information/background on why we have come to this conclusion, read
 [Xavier Decoster's blog post on the subject][auto-incremented-nuget-package].
 
 [auto-incremented-nuget-package]: https://www.xavierdecoster.com/semantic-versioning-auto-incremented-nuget-package-versions
+
 [continuous-delivery]: /docs/reference/modes/continuous-delivery
+
 [conventional-commits]: https://www.conventionalcommits.org/
+
 [faq-branch-name-source]: /docs/learn/faq#merged-branch-names-as-version-source
+
+[git-tagging]: https://git-scm.com/book/en/v2/Git-Basics-Tagging

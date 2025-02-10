@@ -1,11 +1,9 @@
-using GitTools.Testing;
 using GitVersion.Configuration;
 using GitVersion.Core.Tests.Helpers;
 using GitVersion.Core.Tests.IntegrationTests;
+using GitVersion.Git;
 using GitVersion.Logging;
 using Microsoft.Extensions.DependencyInjection;
-using NUnit.Framework;
-using Shouldly;
 
 namespace GitVersion.Core.Tests;
 
@@ -212,11 +210,10 @@ public class RepositoryStoreTests : TestBase
         var fixtureRepository = fixture.Repository.ToGitRepository();
         var gitRepoMetadataProvider = new RepositoryStore(this.log, fixtureRepository);
 
-        Assert.Throws<ArgumentNullException>(() => gitRepoMetadataProvider.GetBranchesContainingCommit(null));
+        Assert.Throws<ArgumentNullException>(() => gitRepoMetadataProvider.GetBranchesContainingCommit(null!));
     }
 
     [Test]
-    [Ignore("Needs more investigations.")]
     public void FindCommitBranchWasBranchedFromShouldReturnNullIfTheRemoteIsTheOnlySource()
     {
         using var fixture = new RemoteRepositoryFixture();
@@ -228,9 +225,12 @@ public class RepositoryStoreTests : TestBase
 
         var branch = localRepository.FindBranch("main");
         branch.ShouldNotBeNull();
-        var branchedCommit = gitRepoMetadataProvider.FindCommitBranchWasBranchedFrom(branch, new GitVersionConfiguration(), Array.Empty<IBranch>());
 
-        Assert.IsNull(branchedCommit.Branch);
-        Assert.IsNull(branchedCommit.Commit);
+        var configuration = GitFlowConfigurationBuilder.New.Build();
+        var branchedCommit = gitRepoMetadataProvider.FindCommitBranchBranchedFrom(branch, configuration, []);
+        branchedCommit.ShouldBe(BranchCommit.Empty);
+
+        var branchedCommits = gitRepoMetadataProvider.FindCommitBranchesBranchedFrom(branch, configuration).ToArray();
+        branchedCommits.ShouldBeEmpty();
     }
 }

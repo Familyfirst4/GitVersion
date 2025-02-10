@@ -1,16 +1,11 @@
 using System.Linq.Expressions;
 using System.Text.RegularExpressions;
+using GitVersion.Core;
 
 namespace GitVersion.Helpers;
 
 internal static class StringFormatWithExtension
 {
-    // This regex matches an expression to replace.
-    // - env:ENV name OR a member name
-    // - optional fallback value after " ?? "
-    // - the fallback value should be a quoted string, but simple unquoted text is allowed for back compat
-    private static readonly Regex TokensRegex = new(@"{((env:(?<envvar>\w+))|(?<member>\w+))(\s+(\?\?)??\s+((?<fallback>\w+)|""(?<fallback>.*)""))??}", RegexOptions.Compiled);
-
     /// <summary>
     /// Formats the <paramref name="template"/>, replacing each expression wrapped in curly braces
     /// with the corresponding property from the <paramref name="source"/> or <paramref name="environment"/>.
@@ -35,17 +30,10 @@ internal static class StringFormatWithExtension
     /// </example>
     public static string FormatWith<T>(this string template, T? source, IEnvironment environment)
     {
-        if (template is null)
-        {
-            throw new ArgumentNullException(nameof(template));
-        }
+        ArgumentNullException.ThrowIfNull(template);
+        ArgumentNullException.ThrowIfNull(source);
 
-        if (source is null)
-        {
-            throw new ArgumentNullException(nameof(source));
-        }
-
-        foreach (Match match in TokensRegex.Matches(template))
+        foreach (Match match in RegexPatterns.Common.ExpandTokensRegex.Matches(template).Cast<Match>())
         {
             string propertyValue;
             string? fallback = match.Groups["fallback"].Success ? match.Groups["fallback"].Value : null;
@@ -71,12 +59,12 @@ internal static class StringFormatWithExtension
         return template;
     }
 
-    private static Func<object?, object> CompileDataBinder(Type type, string expr)
+    private static Func<object?, object?> CompileDataBinder(Type type, string expr)
     {
         ParameterExpression param = Expression.Parameter(typeof(object));
         Expression body = Expression.Convert(param, type);
         body = expr.Split('.').Aggregate(body, Expression.PropertyOrField);
         body = Expression.Convert(body, typeof(object)); // Convert result in case the body produces a Nullable value type.
-        return Expression.Lambda<Func<object?, object>>(body, param).Compile();
+        return Expression.Lambda<Func<object?, object?>>(body, param).Compile();
     }
 }

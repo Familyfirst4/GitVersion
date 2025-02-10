@@ -1,4 +1,4 @@
-using GitVersion.BuildAgents;
+using GitVersion.Agents;
 using GitVersion.Core.Tests.Helpers;
 using GitVersion.Extensions;
 using GitVersion.Helpers;
@@ -7,27 +7,13 @@ namespace GitVersion.App.Tests;
 
 public static class GitVersionHelper
 {
-    public static ExecutionResults ExecuteIn(string workingDirectory,
-        string? exec = null,
-        string? execArgs = null,
-        string? projectFile = null,
-        string? projectArgs = null,
-        bool logToFile = true,
-        params KeyValuePair<string, string?>[] environments
-    )
-    {
-        var logFile = logToFile ? PathHelper.Combine(workingDirectory, "log.txt") : null;
-        var args = new ArgumentBuilder(workingDirectory, exec, execArgs, projectFile, projectArgs, logFile);
-        return ExecuteIn(args, environments);
-    }
-
     public static ExecutionResults ExecuteIn(
-        string workingDirectory,
+        string? workingDirectory,
         string? arguments,
         bool logToFile = true,
         params KeyValuePair<string, string?>[] environments)
     {
-        var logFile = logToFile ? PathHelper.Combine(workingDirectory, "log.txt") : null;
+        var logFile = workingDirectory is not null && logToFile ? PathHelper.Combine(workingDirectory, "log.txt") : null;
         var args = new ArgumentBuilder(workingDirectory, arguments, logFile);
         return ExecuteIn(args, environments);
     }
@@ -52,14 +38,7 @@ public static class GitVersionHelper
 
         foreach (var (key, value) in environments)
         {
-            if (environmentalVariables.ContainsKey(key))
-            {
-                environmentalVariables[key] = value;
-            }
-            else
-            {
-                environmentalVariables.Add(key, value);
-            }
+            environmentalVariables[key] = value;
         }
 
         var exitCode = -1;
@@ -71,14 +50,16 @@ public static class GitVersionHelper
             Console.WriteLine("Executing: {0} {1}", executable, args);
             Console.WriteLine();
 
+            var workingDirectory = arguments.WorkingDirectory ?? PathHelper.GetCurrentDirectory();
+
             exitCode = ProcessHelper.Run(
                 s => output.AppendLine(s),
                 s => output.AppendLine(s),
                 null,
                 executable,
                 args,
-                arguments.WorkingDirectory,
-                environmentalVariables.ToArray());
+                workingDirectory,
+                [.. environmentalVariables]);
         }
         catch (Exception exception)
         {
@@ -98,7 +79,7 @@ public static class GitVersionHelper
 
         if (arguments.LogFile.IsNullOrWhiteSpace() || !File.Exists(arguments.LogFile))
         {
-            return new ExecutionResults(exitCode, output.ToString(), null);
+            return new(exitCode, output.ToString());
         }
 
         var logContents = File.ReadAllText(arguments.LogFile);
@@ -109,6 +90,6 @@ public static class GitVersionHelper
         Console.WriteLine();
         Console.WriteLine("-------------------------------------------------------");
 
-        return new ExecutionResults(exitCode, output.ToString(), logContents);
+        return new(exitCode, output.ToString(), logContents);
     }
 }

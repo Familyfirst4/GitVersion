@@ -15,11 +15,6 @@ public class PackagePrepare : FrostingTask<BuildContext>
         var sourceDir = Paths.Native.Combine(PlatformFamily.Windows.ToString()).Combine("win-x64");
         var sourceFiles = context.GetFiles(sourceDir + "/*.*");
 
-        var cmdlineDir = Paths.ArtifactsBinCmdline.Combine("tools");
-
-        context.EnsureDirectoryExists(cmdlineDir);
-        context.CopyFiles(sourceFiles, cmdlineDir);
-
         var portableDir = Paths.ArtifactsBinPortable.Combine("tools");
         context.EnsureDirectoryExists(portableDir);
 
@@ -30,7 +25,7 @@ public class PackagePrepare : FrostingTask<BuildContext>
     private static void PackPrepareNative(BuildContext context)
     {
         // publish single file for all native runtimes (self contained)
-        var platform = context.Environment.Platform.Family;
+        var platform = context.Platform;
         var runtimes = context.NativeRuntimes[platform];
 
         foreach (var runtime in runtimes)
@@ -39,22 +34,24 @@ public class PackagePrepare : FrostingTask<BuildContext>
 
             // testing windows and macos artifacts, the linux is tested with docker
             if (platform == PlatformFamily.Linux) continue;
-            if (runtime.EndsWith("arm64")) continue;
 
-            context.Information("Validating native lib:");
-            var nativeExe = outputPath.CombineWithFilePath(context.IsOnWindows ? "gitversion.exe" : "gitversion");
-            context.ValidateOutput(nativeExe.FullPath, "/showvariable FullSemver", context.Version?.GitVersion?.FullSemVer);
+            if (context.IsRunningOnAmd64() && runtime.EndsWith("x64") || context.IsRunningOnArm64() && runtime.EndsWith("arm64"))
+            {
+                context.Information("Validating native lib:");
+                var nativeExe = outputPath.CombineWithFilePath(context.IsOnWindows ? "gitversion.exe" : "gitversion");
+                context.ValidateOutput(nativeExe.FullPath, "/showvariable FullSemver", context.Version?.GitVersion?.FullSemVer);
+            }
         }
     }
 
     private static DirectoryPath PackPrepareNative(BuildContext context, string runtime)
     {
-        var platform = context.Environment.Platform.Family;
+        var platform = context.Platform;
         var outputPath = Paths.Native.Combine(platform.ToString().ToLower()).Combine(runtime);
 
         var settings = new DotNetPublishSettings
         {
-            Framework = Constants.NetVersion60,
+            Framework = $"net{Constants.VersionLatest}",
             Runtime = runtime,
             NoRestore = false,
             Configuration = context.MsBuildConfiguration,
@@ -64,12 +61,6 @@ public class PackagePrepare : FrostingTask<BuildContext>
             PublishSingleFile = true,
             SelfContained = true
         };
-
-        // workaround for https://github.com/dotnet/runtime/issues/49508
-        if (runtime == "osx-arm64")
-        {
-            settings.ArgumentCustomization = arg => arg.Append("/p:OsxArm64=true");
-        }
 
         context.DotNetPublish("./src/GitVersion.App/GitVersion.App.csproj", settings);
 

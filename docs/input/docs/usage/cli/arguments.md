@@ -23,7 +23,6 @@ GitVersion [path]
 
     path            The directory containing .git. If not defined current
                     directory is used. (Must be first argument)
-    init            Configuration utility for gitversion
     /version        Displays the version of GitVersion
     /diag           Runs GitVersion with additional diagnostic information
                     (requires git.exe to be installed)
@@ -34,13 +33,17 @@ GitVersion [path]
                     'file' or 'buildserver', will default to 'json'.
     /outputfile     Path to output file. It is used in combination with /output
                     'file'.
-    /showvariable   Used in conjuntion with /output json, will output just a
+    /showvariable   Used in conjunction with /output json, will output just a
                     particular variable. E.g. /output json /showvariable SemVer
                     - will output `1.2.3+beta.4`
+    /format         Used in conjunction with /output json, will output a format
+                    containing version variables.
+                    E.g. /output json /format {SemVer} - will output `1.2.3+beta.4`
+                         /output json /format {Major}.{Minor} - will output `1.2`
     /l              Path to logfile.
-    /config         Path to config file (defaults to GitVersion.yml)
+    /config         Path to config file (defaults to GitVersion.yml or GitVersion.yaml)
     /showconfig     Outputs the effective GitVersion config (defaults + custom
-                    from GitVersion.yml) in yaml format
+                    from GitVersion.yml or GitVersion.yaml) in yaml format
     /overrideconfig Overrides GitVersion config values inline (semicolon-
                     separated key value pairs e.g. /overrideconfig
                     tag-prefix=Foo)
@@ -61,13 +64,10 @@ GitVersion [path]
                     (.csproj/.vbproj/.fsproj) files in the git repo and update
                     them
                     Note: This is only compatible with the newer Sdk projects
-    /updateassemblyinfofilename
-                    Specify name of AssemblyInfo file. Can also
-                    /updateAssemblyInfo GlobalAssemblyInfo.cs as a shorthand
     /ensureassemblyinfo
                     If the assembly info file specified with
-                    /updateassemblyinfo or /updateassemblyinfofilename is not
-                    found, it be created with these attributes:
+                    /updateassemblyinfo is not
+                    found, it will be created with these attributes:
                     AssemblyFileVersion, AssemblyVersion and
                     AssemblyInformationalVersion.
                     Supports writing version info for: C#, F#, VB
@@ -93,13 +93,11 @@ GitVersion [path]
                     Use this switch to override
     /nofetch        Disables 'git fetch' during version calculation. Might cause
                     GitVersion to not calculate your version as expected.
-
-gitversion init     Configuration utility for gitversion
 ```
 
 ## Override config
 
-`/overrideconfig [key=value]` will override appropriate `key` from 'GitVersion.yml'.
+`/overrideconfig [key=value]` will override appropriate `key` from 'GitVersion.yml' or 'GitVersion.yaml'.
 
 To specify multiple options add multiple `/overrideconfig [key=value]` entries:
 `/overrideconfig key1=value1 /overrideconfig key2=value2`.
@@ -110,28 +108,28 @@ Double quote character inside of the double quoted `value` has to be be escaped 
 
 Following options are supported:
 
-1.  `assembly-file-versioning-format`
-2.  `assembly-file-versioning-scheme`
-3.  `assembly-informational-format`
-4.  `assembly-versioning-format`
-5.  `assembly-versioning-scheme`
-7.  `commit-date-format`
-8.  `commit-message-incrementing`
-10. `continuous-delivery-fallback-tag`
-11. `increment`
-13. `major-version-bump-message`
-14. `minor-version-bump-message`
-15. `mode`
-16. `next-version`
-17. `no-bump-message`
-18. `patch-version-bump-message`
-19. `tag-prefix`
-20. `tag-pre-release-weight`
-21. `update-build-number`
+1. `assembly-file-versioning-format`
+2. `assembly-file-versioning-scheme`
+3. `assembly-informational-format`
+4. `assembly-versioning-format`
+5. `assembly-versioning-scheme`
+6. `commit-date-format`
+7. `commit-message-incrementing`
+8. `label`
+9. `increment`
+10. `major-version-bump-message`
+11. `minor-version-bump-message`
+12. `mode`
+13. `next-version`
+14. `no-bump-message`
+15. `patch-version-bump-message`
+16. `tag-prefix`
+17. `tag-pre-release-weight`
+18. `update-build-number`
 
 Read more about [Configuration](/docs/reference/configuration).
 
-Using `override-config` on the command line will not change the contents of the config file `GitVersion.yml`.
+Using `override-config` on the command line will not change the contents of the config file `GitVersion.yml` or `GitVersion.yaml`.
 
 ### Example: How to override configuration option 'tag-prefix' to use prefix 'custom'
 

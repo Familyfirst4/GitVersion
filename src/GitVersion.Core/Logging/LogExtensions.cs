@@ -1,3 +1,5 @@
+using GitVersion.Helpers;
+
 namespace GitVersion.Logging;
 
 public static class LogExtensions
@@ -42,7 +44,7 @@ public static class LogExtensions
 
     public static void Error(this ILog log, Verbosity verbosity, LogAction logAction) => log.Write(verbosity, LogLevel.Error, logAction);
 
-    public static void Write(this ILog log, LogLevel level, string format, params object[] args)
+    private static void Write(this ILog log, LogLevel level, string format, params object[] args)
     {
         var verbosity = GetVerbosityForLevel(level);
         if (verbosity > log.Verbosity)
@@ -94,16 +96,13 @@ public static class LogExtensions
 
     private static IDisposable WithVerbosity(this ILog log, Verbosity verbosity)
     {
-        if (log == null)
-        {
-            throw new ArgumentNullException(nameof(log));
-        }
+        ArgumentNullException.ThrowIfNull(log);
         var lastVerbosity = log.Verbosity;
         log.Verbosity = verbosity;
         return Disposable.Create(() => log.Verbosity = lastVerbosity);
     }
 
-    public static Verbosity GetVerbosityForLevel(LogLevel level) => VerbosityMaps[level];
+    private static Verbosity GetVerbosityForLevel(LogLevel level) => VerbosityMaps[level];
 
     private static readonly IDictionary<LogLevel, Verbosity> VerbosityMaps = new Dictionary<LogLevel, Verbosity>
     {

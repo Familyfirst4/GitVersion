@@ -1,6 +1,8 @@
+using GitVersion.Helpers;
+
 namespace GitVersion.Logging;
 
-public class ConsoleAdapter : IConsole
+internal class ConsoleAdapter : IConsole
 {
     public void WriteLine(string? msg) => Console.WriteLine(msg);
 

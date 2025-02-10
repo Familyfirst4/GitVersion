@@ -10,11 +10,11 @@ Description: |
 `AssemblyInfo.cs` or `AssemblyInfo.vb` files in the git repo and update them.
 It will update the following assembly attributes:
 
-*   `AssemblyVersion` will be set to the `AssemblySemVer` variable.
-*   `AssemblyFileVersion` will be set to the `MajorMinorPatch` variable with an
-    appended `.0`.
-*   `AssemblyInformationalVersion` will be set to the `InformationalVersion`
-    variable.
+* `AssemblyVersion` will be set to the `AssemblySemVer` variable.
+* `AssemblyFileVersion` will be set to the `MajorMinorPatch` variable with an
+  appended `.0`.
+* `AssemblyInformationalVersion` will be set to the `InformationalVersion`
+  variable.
 
 Note that contrary to when using the [MSBuild Task][msbuild-task] the
 attributes must already exist in the `AssemblyInfo.cs` or `AssemblyInfo.vb`
@@ -29,11 +29,11 @@ already exist.  Use the `/ensureassemblyinfo` switch alongside
 `/updateassemblyinfo <filename>`, if the filename specified does not exist it
 will be generated based on a known template that adds:
 
-*   `AssemblyVersion` will be set to the `AssemblySemVer` variable.
-*   `AssemblyFileVersion` will be set to the `MajorMinorPatch` variable with an
-    appended `.0`.
-*   `AssemblyInformationalVersion` will be set to the `InformationalVersion`
-    variable.
+* `AssemblyVersion` will be set to the `AssemblySemVer` variable.
+* `AssemblyFileVersion` will be set to the `MajorMinorPatch` variable with an
+  appended `.0`.
+* `AssemblyInformationalVersion` will be set to the `InformationalVersion`
+  variable.
 
 This can be done for \*.cs, \*.vb and \*.fs files.
 
@@ -81,4 +81,5 @@ To support integration with WiX projects, use `GitVersion.exe
 referenced in the WiX project files.
 
 [msbuild-task]: /docs/usage/msbuild
+
 [variables]: /docs/reference/variables

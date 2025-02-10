@@ -1,10 +1,14 @@
 using GitVersion.Configuration;
+using GitVersion.Git;
 
 namespace GitVersion.VersionCalculation;
 
 public interface IIncrementStrategyFinder
 {
-    VersionField DetermineIncrementedField(GitVersionContext context, BaseVersion baseVersion, EffectiveConfiguration configuration);
+    VersionField DetermineIncrementedField(
+        ICommit currentCommit, ICommit? baseVersionSource, bool shouldIncrement, EffectiveConfiguration configuration, string? label);
 
-    VersionField? GetIncrementForCommits(GitVersionConfiguration configuration, IEnumerable<ICommit> commits);
+    IEnumerable<ICommit> GetMergedCommits(ICommit mergeCommit, int index, IIgnoreConfiguration ignore);
+
+    VersionField GetIncrementForcedByCommit(ICommit commit, IGitVersionConfiguration configuration);
 }

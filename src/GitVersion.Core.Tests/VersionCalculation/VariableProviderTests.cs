@@ -1,9 +1,9 @@
+using GitVersion.Configuration;
 using GitVersion.Core.Tests.Helpers;
+using GitVersion.Git;
 using GitVersion.Logging;
 using GitVersion.VersionCalculation;
 using Microsoft.Extensions.DependencyInjection;
-using NUnit.Framework;
-using Shouldly;
 
 namespace GitVersion.Core.Tests;
 
@@ -18,7 +18,7 @@ public class VariableProviderTests : TestBase
     {
         ShouldlyConfiguration.ShouldMatchApprovedDefaults.LocateTestMethodUsingAttribute<TestAttribute>();
 
-        this.logMessages = new List<string>();
+        this.logMessages = [];
 
         var sp = ConfigureServices(services =>
         {
@@ -32,107 +32,113 @@ public class VariableProviderTests : TestBase
     [Test]
     public void ProvidesVariablesInContinuousDeliveryModeForPreRelease()
     {
-        var semVer = new SemanticVersion
+        var semanticVersion = new SemanticVersion
         {
             Major = 1,
             Minor = 2,
             Patch = 3,
             PreReleaseTag = "unstable.4",
-            BuildMetaData = "5.Branch.develop"
+            BuildMetaData = new("5.Branch.develop")
+            {
+                VersionSourceSha = "versionSourceSha",
+                Sha = "commitSha",
+                ShortSha = "commitShortSha",
+                CommitDate = DateTimeOffset.Parse("2014-03-06 23:59:59Z")
+            }
         };
 
-        semVer.BuildMetaData.VersionSourceSha = "versionSourceSha";
-        semVer.BuildMetaData.Sha = "commitSha";
-        semVer.BuildMetaData.ShortSha = "commitShortSha";
-        semVer.BuildMetaData.CommitDate = DateTimeOffset.Parse("2014-03-06 23:59:59Z");
+        var configuration = GitFlowConfigurationBuilder.New.Build();
+        int preReleaseWeight = configuration.GetEffectiveConfiguration(ReferenceName.FromBranchName("unstable")).PreReleaseWeight;
+        var variables = this.variableProvider.GetVariablesFor(semanticVersion, configuration, preReleaseWeight);
 
-
-        var configuration = new TestEffectiveConfiguration();
-
-        var vars = this.variableProvider.GetVariablesFor(semVer, configuration, false);
-
-        vars.ToString().ShouldMatchApproved(c => c.SubFolder("Approved"));
+        variables.ToJson().ShouldMatchApproved(c => c.SubFolder("Approved"));
     }
 
     [Test]
     public void ProvidesVariablesInContinuousDeploymentModeForPreRelease()
     {
-        var semVer = new SemanticVersion
+        var semanticVersion = new SemanticVersion
         {
             Major = 1,
             Minor = 2,
             Patch = 3,
-            PreReleaseTag = "unstable.4",
-            BuildMetaData = "5.Branch.develop"
+            PreReleaseTag = new("unstable", 8, true),
+            BuildMetaData = new("Branch.develop")
+            {
+                VersionSourceSha = "versionSourceSha",
+                Sha = "commitSha",
+                ShortSha = "commitShortSha",
+                CommitsSinceVersionSource = 5,
+                CommitDate = DateTimeOffset.Parse("2014-03-06 23:59:59Z")
+            }
         };
 
-        semVer.BuildMetaData.VersionSourceSha = "versionSourceSha";
-        semVer.BuildMetaData.Sha = "commitSha";
-        semVer.BuildMetaData.ShortSha = "commitShortSha";
-        semVer.BuildMetaData.CommitDate = DateTimeOffset.Parse("2014-03-06 23:59:59Z");
+        var configuration = GitFlowConfigurationBuilder.New.Build();
+        int preReleaseWeight = configuration.GetEffectiveConfiguration(ReferenceName.FromBranchName("unstable")).PreReleaseWeight;
+        var variables = this.variableProvider.GetVariablesFor(semanticVersion, configuration, preReleaseWeight);
 
-        var configuration = new TestEffectiveConfiguration(versioningMode: VersioningMode.ContinuousDeployment);
-
-        var vars = this.variableProvider.GetVariablesFor(semVer, configuration, false);
-
-        vars.ToString().ShouldMatchApproved(c => c.SubFolder("Approved"));
+        variables.ToJson().ShouldMatchApproved(c => c.SubFolder("Approved"));
     }
 
     [Test]
     public void ProvidesVariablesInContinuousDeliveryModeForStable()
     {
-        var semVer = new SemanticVersion
+        var semanticVersion = new SemanticVersion
         {
             Major = 1,
             Minor = 2,
             Patch = 3,
-            BuildMetaData = "5.Branch.develop"
+            BuildMetaData = new("5.Branch.develop")
+            {
+                VersionSourceSha = "versionSourceSha",
+                Sha = "commitSha",
+                ShortSha = "commitShortSha",
+                CommitDate = DateTimeOffset.Parse("2014-03-06 23:59:59Z")
+            }
         };
 
-        semVer.BuildMetaData.VersionSourceSha = "versionSourceSha";
-        semVer.BuildMetaData.Sha = "commitSha";
-        semVer.BuildMetaData.ShortSha = "commitShortSha";
-        semVer.BuildMetaData.CommitDate = DateTimeOffset.Parse("2014-03-06 23:59:59Z");
+        var configuration = GitFlowConfigurationBuilder.New.WithTagPreReleaseWeight(0).Build();
+        int preReleaseWeight = configuration.GetEffectiveConfiguration(ReferenceName.FromBranchName("develop")).PreReleaseWeight;
+        var variables = this.variableProvider.GetVariablesFor(semanticVersion, configuration, preReleaseWeight);
 
-        var configuration = new TestEffectiveConfiguration();
-
-        var vars = this.variableProvider.GetVariablesFor(semVer, configuration, false);
-
-        vars.ToString().ShouldMatchApproved(c => c.SubFolder("Approved"));
+        variables.ToJson().ShouldMatchApproved(c => c.SubFolder("Approved"));
     }
 
     [Test]
     public void ProvidesVariablesInContinuousDeploymentModeForStable()
     {
-        var semVer = new SemanticVersion
+        var semanticVersion = new SemanticVersion
         {
             Major = 1,
             Minor = 2,
             Patch = 3,
-            BuildMetaData = "5.Branch.develop"
+            PreReleaseTag = new("ci", 5, true),
+            BuildMetaData = new("Branch.develop")
+            {
+                VersionSourceSha = "versionSourceSha",
+                Sha = "commitSha",
+                ShortSha = "commitShortSha",
+                CommitsSinceVersionSource = 5,
+                CommitDate = DateTimeOffset.Parse("2014-03-06 23:59:59Z")
+            }
         };
 
-        semVer.BuildMetaData.VersionSourceSha = "versionSourceSha";
-        semVer.BuildMetaData.Sha = "commitSha";
-        semVer.BuildMetaData.ShortSha = "commitShortSha";
-        semVer.BuildMetaData.CommitDate = DateTimeOffset.Parse("2014-03-06 23:59:59Z");
+        var configuration = GitFlowConfigurationBuilder.New.Build();
+        int preReleaseWeight = configuration.GetEffectiveConfiguration(ReferenceName.FromBranchName("develop")).PreReleaseWeight;
+        var variables = this.variableProvider.GetVariablesFor(semanticVersion, configuration, preReleaseWeight);
 
-        var configuration = new TestEffectiveConfiguration(versioningMode: VersioningMode.ContinuousDeployment);
-
-        var vars = this.variableProvider.GetVariablesFor(semVer, configuration, false);
-
-        vars.ToString().ShouldMatchApproved(c => c.SubFolder("Approved"));
+        variables.ToJson().ShouldMatchApproved(c => c.SubFolder("Approved"));
     }
 
     [Test]
     public void ProvidesVariablesInContinuousDeploymentModeForStableWhenCurrentCommitIsTagged()
     {
-        var semVer = new SemanticVersion
+        var semanticVersion = new SemanticVersion
         {
             Major = 1,
             Minor = 2,
             Patch = 3,
-            BuildMetaData = new SemanticVersionBuildMetaData
+            BuildMetaData = new()
             {
                 VersionSourceSha = "versionSourceSha",
                 CommitsSinceTag = 5,
@@ -143,105 +149,139 @@ public class VariableProviderTests : TestBase
             }
         };
 
-        var configuration = new TestEffectiveConfiguration(versioningMode: VersioningMode.ContinuousDeployment);
+        var configuration = GitFlowConfigurationBuilder.New.WithTagPreReleaseWeight(0).Build();
+        int preReleaseWeight = configuration.GetEffectiveConfiguration(ReferenceName.FromBranchName("develop")).PreReleaseWeight;
+        var variables = this.variableProvider.GetVariablesFor(semanticVersion, configuration, preReleaseWeight);
 
-        var vars = this.variableProvider.GetVariablesFor(semVer, configuration, true);
-
-        vars.ToString().ShouldMatchApproved(c => c.SubFolder("Approved"));
+        variables.ToJson().ShouldMatchApproved(c => c.SubFolder("Approved"));
     }
 
     [Test]
     public void ProvidesVariablesInContinuousDeploymentModeWithTagNamePattern()
     {
-        var semVer = new SemanticVersion
+        var semanticVersion = new SemanticVersion
         {
             Major = 1,
             Minor = 2,
             Patch = 3,
-            PreReleaseTag = "PullRequest",
-            BuildMetaData = "5.Branch.develop"
+            PreReleaseTag = new("PullRequest2", 5, true),
+            BuildMetaData = new("Branch.develop")
+            {
+                Branch = "pull/2/merge",
+                Sha = "commitSha",
+                ShortSha = "commitShortSha",
+                CommitDate = DateTimeOffset.Parse("2014-03-06 23:59:59Z")
+            }
         };
 
-        semVer.BuildMetaData.Branch = "pull/2/merge";
-        semVer.BuildMetaData.Sha = "commitSha";
-        semVer.BuildMetaData.ShortSha = "commitShortSha";
-        semVer.BuildMetaData.CommitDate = DateTimeOffset.Parse("2014-03-06 23:59:59Z");
+        var configuration = GitFlowConfigurationBuilder.New.Build();
+        int preReleaseWeight = configuration.GetEffectiveConfiguration(ReferenceName.FromBranchName("pull-request")).PreReleaseWeight;
+        var variables = this.variableProvider.GetVariablesFor(semanticVersion, configuration, preReleaseWeight);
 
-        var configuration = new TestEffectiveConfiguration(versioningMode: VersioningMode.ContinuousDeployment, tagNumberPattern: @"[/-](?<number>\d+)[-/]");
-        var vars = this.variableProvider.GetVariablesFor(semVer, configuration, false);
-
-        vars.FullSemVer.ShouldBe("1.2.3-PullRequest2.5");
+        variables.FullSemVer.ShouldBe("1.2.3-PullRequest2.5");
     }
 
     [Test]
-    public void ProvidesVariablesInContinuousDeploymentModeWithTagSetToUseBranchName()
+    public void ProvidesVariablesInContinuousDeploymentModeWithTagSetToBranchName()
     {
-        var semVer = new SemanticVersion
+        var semanticVersion = new SemanticVersion
         {
             Major = 1,
             Minor = 2,
             Patch = 3,
-            BuildMetaData = "5.Branch.develop"
+            PreReleaseTag = new("feature", 5, true),
+            BuildMetaData = new("Branch.develop")
+            {
+                Branch = "feature",
+                Sha = "commitSha",
+                ShortSha = "commitShortSha",
+                CommitDate = DateTimeOffset.Parse("2014-03-06 23:59:59Z")
+            }
         };
 
-        semVer.BuildMetaData.Branch = "feature";
-        semVer.BuildMetaData.Sha = "commitSha";
-        semVer.BuildMetaData.ShortSha = "commitShortSha";
-        semVer.BuildMetaData.CommitDate = DateTimeOffset.Parse("2014-03-06 23:59:59Z");
+        var configuration = GitFlowConfigurationBuilder.New.Build();
+        int preReleaseWeight = configuration.GetEffectiveConfiguration(ReferenceName.FromBranchName("develop")).PreReleaseWeight;
+        var variables = this.variableProvider.GetVariablesFor(semanticVersion, configuration, preReleaseWeight);
 
-        var configuration = new TestEffectiveConfiguration(versioningMode: VersioningMode.ContinuousDeployment, tag: "useBranchName");
-        var vars = this.variableProvider.GetVariablesFor(semVer, configuration, false);
-
-        vars.FullSemVer.ShouldBe("1.2.3-feature.5");
+        variables.FullSemVer.ShouldBe("1.2.3-feature.5");
     }
 
     [Test]
     public void ProvidesVariablesInContinuousDeliveryModeForFeatureBranch()
     {
-        var semVer = new SemanticVersion
+        var semanticVersion = new SemanticVersion
         {
             Major = 1,
             Minor = 2,
             Patch = 3,
-            BuildMetaData = "5.Branch.feature/123"
+            BuildMetaData = new("5.Branch.feature/123")
+            {
+                Branch = "feature/123",
+                VersionSourceSha = "versionSourceSha",
+                Sha = "commitSha",
+                ShortSha = "commitShortSha",
+                CommitDate = DateTimeOffset.Parse("2014-03-06 23:59:59Z")
+            }
         };
 
-        semVer.BuildMetaData.Branch = "feature/123";
-        semVer.BuildMetaData.VersionSourceSha = "versionSourceSha";
-        semVer.BuildMetaData.Sha = "commitSha";
-        semVer.BuildMetaData.ShortSha = "commitShortSha";
-        semVer.BuildMetaData.CommitDate = DateTimeOffset.Parse("2014-03-06 23:59:59Z");
+        var configuration = GitFlowConfigurationBuilder.New.WithTagPreReleaseWeight(0).Build();
+        int preReleaseWeight = configuration.GetEffectiveConfiguration(ReferenceName.FromBranchName("develop")).PreReleaseWeight;
+        var variables = this.variableProvider.GetVariablesFor(semanticVersion, configuration, preReleaseWeight);
 
-
-        var configuration = new TestEffectiveConfiguration();
-
-        var vars = this.variableProvider.GetVariablesFor(semVer, configuration, false);
-
-        vars.ToString().ShouldMatchApproved(c => c.SubFolder("Approved"));
+        variables.ToJson().ShouldMatchApproved(c => c.SubFolder("Approved"));
     }
 
     [Test]
     public void ProvidesVariablesInContinuousDeliveryModeForFeatureBranchWithCustomAssemblyInfoFormat()
     {
-        var semVer = new SemanticVersion
+        var semanticVersion = new SemanticVersion
         {
             Major = 1,
             Minor = 2,
             Patch = 3,
-            BuildMetaData = "5.Branch.feature/123"
+            BuildMetaData = new("5.Branch.feature/123")
+            {
+                Branch = "feature/123",
+                VersionSourceSha = "versionSourceSha",
+                Sha = "commitSha",
+                ShortSha = "commitShortSha",
+                CommitDate = DateTimeOffset.Parse("2014-03-06 23:59:59Z")
+            }
         };
 
-        semVer.BuildMetaData.Branch = "feature/123";
-        semVer.BuildMetaData.VersionSourceSha = "versionSourceSha";
-        semVer.BuildMetaData.Sha = "commitSha";
-        semVer.BuildMetaData.ShortSha = "commitShortSha";
-        semVer.BuildMetaData.CommitDate = DateTimeOffset.Parse("2014-03-06 23:59:59Z");
+        var configuration = GitFlowConfigurationBuilder.New.WithTagPreReleaseWeight(0)
+            .WithAssemblyInformationalFormat("{Major}.{Minor}.{Patch}+{CommitsSinceVersionSource}.Branch.{BranchName}.Sha.{ShortSha}")
+            .Build();
+        int preReleaseWeight = configuration.GetEffectiveConfiguration(ReferenceName.FromBranchName("develop")).PreReleaseWeight;
+        var variables = this.variableProvider.GetVariablesFor(semanticVersion, configuration, preReleaseWeight);
 
+        variables.ToJson().ShouldMatchApproved(c => c.SubFolder("Approved"));
+    }
 
-        var configuration = new TestEffectiveConfiguration(assemblyInformationalFormat: "{Major}.{Minor}.{Patch}+{CommitsSinceVersionSource}.Branch.{BranchName}.Sha.{ShortSha}");
+    [Test]
+    public void ProvidesVariablesInContinuousDeploymentModeForMainBranchWithEmptyLabel()
+    {
+        var semanticVersion = new SemanticVersion
+        {
+            Major = 1,
+            Minor = 2,
+            Patch = 3,
+            PreReleaseTag = new(string.Empty, 9, true),
+            BuildMetaData = new("Branch.main")
+            {
+                Branch = "main",
+                VersionSourceSha = "versionSourceSha",
+                Sha = "commitSha",
+                ShortSha = "commitShortSha",
+                CommitsSinceVersionSource = 5,
+                CommitDate = DateTimeOffset.Parse("2014-03-06 23:59:59Z")
+            }
+        };
 
-        var vars = this.variableProvider.GetVariablesFor(semVer, configuration, false);
+        var configuration = GitFlowConfigurationBuilder.New.Build();
+        int preReleaseWeight = configuration.GetEffectiveConfiguration(ReferenceName.FromBranchName("main")).PreReleaseWeight;
+        var variables = this.variableProvider.GetVariablesFor(semanticVersion, configuration, preReleaseWeight);
 
-        vars.ToString().ShouldMatchApproved(c => c.SubFolder("Approved"));
+        variables.ToJson().ShouldMatchApproved(x => x.SubFolder("Approved"));
     }
 }

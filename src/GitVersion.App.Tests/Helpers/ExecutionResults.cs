@@ -1,29 +1,26 @@
+using GitVersion.Core.Tests;
+using GitVersion.Extensions;
 using GitVersion.OutputVariables;
 
 namespace GitVersion.App.Tests;
 
-public class ExecutionResults
+public class ExecutionResults(int exitCode, string? output, string? logContents = null)
 {
-    public ExecutionResults(int exitCode, string output, string? logContents)
-    {
-        ExitCode = exitCode;
-        Output = output;
-        Log = logContents;
-    }
+    public int ExitCode { get; init; } = exitCode;
+    public string? Output { get; init; } = output;
+    public string? Log { get; init; } = logContents;
 
-    public int ExitCode { get; }
-    public string Output { get; }
-    public string? Log { get; }
-
-    public virtual VersionVariables OutputVariables
+    public GitVersionVariables? OutputVariables
     {
         get
         {
-            var jsonStartIndex = Output.IndexOf("{", StringComparison.Ordinal);
-            var jsonEndIndex = Output.IndexOf("}", StringComparison.Ordinal);
+            if (Output.IsNullOrWhiteSpace()) return null;
+
+            var jsonStartIndex = Output.IndexOf('{');
+            var jsonEndIndex = Output.IndexOf('}');
             var json = Output.Substring(jsonStartIndex, jsonEndIndex - jsonStartIndex + 1);
 
-            return VersionVariables.FromJson(json);
+            return json.ToGitVersionVariables();
         }
     }
 }

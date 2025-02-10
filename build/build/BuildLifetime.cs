@@ -1,4 +1,5 @@
 using Build.Utilities;
+using Common.Lifetime;
 using Common.Utilities;
 
 namespace Build;
@@ -9,23 +10,27 @@ public class BuildLifetime : BuildLifetimeBase<BuildContext>
     {
         base.Setup(context, info);
 
-        context.MsBuildConfiguration = context.Argument(Arguments.Configuration, "Release");
+        context.MsBuildConfiguration = context.Argument(Arguments.Configuration, Constants.DefaultConfiguration);
         context.EnabledUnitTests = context.IsEnabled(EnvVars.EnabledUnitTests);
 
         context.Credentials = Credentials.GetCredentials(context);
 
-        SetMsBuildSettingsVersion(context);
+        if (context.Version is not null)
+        {
+            SetMsBuildSettingsVersion(context);
+        }
 
         context.StartGroup("Build Setup");
         LogBuildInformation(context);
-        context.Information("Configuration:     {0}", context.MsBuildConfiguration);
+        context.Information($"Configuration:        {context.MsBuildConfiguration}");
         context.EndGroup();
     }
 
     private static void SetMsBuildSettingsVersion(BuildContext context)
     {
         var msBuildSettings = context.MsBuildSettings;
-        var version = context.Version!;
+        ArgumentNullException.ThrowIfNull(context.Version);
+        var version = context.Version;
 
         msBuildSettings.SetVersion(version.SemVersion);
         msBuildSettings.SetAssemblyVersion(version.Version);
@@ -37,5 +42,8 @@ public class BuildLifetime : BuildLifetimeBase<BuildContext>
         msBuildSettings.WithProperty("RepositoryCommit", version.GitVersion.Sha);
         msBuildSettings.WithProperty("NoPackageAnalysis", "true");
         msBuildSettings.WithProperty("UseSharedCompilation", "false");
+
+        // https://github.com/dotnet/docs/issues/37674
+        msBuildSettings.WithProperty("IncludeSourceRevisionInInformationalVersion", "false");
     }
 }

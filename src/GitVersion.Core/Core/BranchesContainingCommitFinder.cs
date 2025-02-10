@@ -1,23 +1,19 @@
+using GitVersion.Common;
 using GitVersion.Extensions;
+using GitVersion.Git;
 using GitVersion.Logging;
 
 namespace GitVersion;
 
-internal class BranchesContainingCommitFinder
+internal class BranchesContainingCommitFinder(IRepositoryStore repositoryStore, ILog log)
 {
-    private readonly ILog log;
-    private readonly IGitRepository repository;
+    private readonly ILog log = log.NotNull();
+    private readonly IRepositoryStore repositoryStore = repositoryStore.NotNull();
 
-    public BranchesContainingCommitFinder(IGitRepository repository, ILog log)
+    public IEnumerable<IBranch> GetBranchesContainingCommit(ICommit commit, IEnumerable<IBranch>? branches = null, bool onlyTrackedBranches = false)
     {
-        this.repository = repository.NotNull();
-        this.log = log.NotNull();
-    }
-
-    public IEnumerable<IBranch> GetBranchesContainingCommit(ICommit? commit, IEnumerable<IBranch>? branches = null, bool onlyTrackedBranches = false)
-    {
-        commit = commit.NotNull();
-        branches ??= this.repository.Branches.ToList();
+        commit.NotNull();
+        branches ??= [.. this.repositoryStore.Branches];
 
         // TODO Should we cache this?
         // Yielding part is split from the main part of the method to avoid having the exception check performed lazily.
@@ -50,7 +46,7 @@ internal class BranchesContainingCommitFinder
             {
                 log.Info($"Searching for commits reachable from '{branch}'.");
 
-                var commits = GetCommitsReacheableFrom(commit, branch);
+                var commits = this.repositoryStore.GetCommitsReacheableFrom(commit, branch);
 
                 if (!commits.Any())
                 {
@@ -64,16 +60,8 @@ internal class BranchesContainingCommitFinder
         }
     }
 
-    private IEnumerable<ICommit> GetCommitsReacheableFrom(IGitObject commit, IBranch branch)
-    {
-        var filter = new CommitFilter { IncludeReachableFrom = branch };
-        var commitCollection = this.repository.Commits.QueryBy(filter);
-
-        return commitCollection.Where(c => c.Sha == commit.Sha);
-    }
-
     private static bool IncludeTrackedBranches(IBranch branch, bool includeOnlyTracked)
-        => includeOnlyTracked && branch.IsTracking || !includeOnlyTracked;
+        => (includeOnlyTracked && branch.IsTracking) || !includeOnlyTracked;
 
     private static bool BranchTipIsNullOrCommit(IBranch branch, IGitObject commit)
         => branch.Tip == null || branch.Tip.Sha == commit.Sha;

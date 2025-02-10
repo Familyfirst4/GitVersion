@@ -1,3 +1,4 @@
+using GitVersion.Configuration;
 using GitVersion.Extensions;
 using GitVersion.Helpers;
 using GitVersion.MsBuild.Tasks;
@@ -6,22 +7,23 @@ using Microsoft.Extensions.Options;
 
 namespace GitVersion.MsBuild;
 
-public class GitVersionTaskExecutor : IGitVersionTaskExecutor
+internal class GitVersionTaskExecutor(
+    IFileSystem fileSystem,
+    IGitVersionOutputTool gitVersionOutputTool,
+    IVersionVariableSerializer serializer,
+    IConfigurationProvider configurationProvider,
+    IOptions<GitVersionOptions> options)
+    : IGitVersionTaskExecutor
 {
-    private readonly IFileSystem fileSystem;
-    private readonly IGitVersionOutputTool gitVersionOutputTool;
-    private readonly IOptions<GitVersionOptions> options;
-
-    public GitVersionTaskExecutor(IFileSystem fileSystem, IGitVersionOutputTool gitVersionOutputTool, IOptions<GitVersionOptions> options)
-    {
-        this.fileSystem = fileSystem.NotNull();
-        this.gitVersionOutputTool = gitVersionOutputTool.NotNull();
-        this.options = options.NotNull();
-    }
+    private readonly IFileSystem fileSystem = fileSystem.NotNull();
+    private readonly IGitVersionOutputTool gitVersionOutputTool = gitVersionOutputTool.NotNull();
+    private readonly IVersionVariableSerializer serializer = serializer.NotNull();
+    private readonly IConfigurationProvider configurationProvider = configurationProvider.NotNull();
+    private readonly IOptions<GitVersionOptions> options = options.NotNull();
 
     public void GetVersion(GetVersion task)
     {
-        var versionVariables = VersionVariables.FromFile(task.VersionFile, fileSystem);
+        var versionVariables = GitVersionVariables(task);
         var outputType = typeof(GetVersion);
         foreach (var (key, value) in versionVariables)
         {
@@ -31,8 +33,8 @@ public class GitVersionTaskExecutor : IGitVersionTaskExecutor
 
     public void UpdateAssemblyInfo(UpdateAssemblyInfo task)
     {
-        var versionVariables = VersionVariables.FromFile(task.VersionFile, fileSystem);
-        FileHelper.DeleteTempFiles();
+        var versionVariables = GitVersionVariables(task);
+        DeleteTempFiles();
         FileHelper.CheckForInvalidFiles(task.CompileFiles, task.ProjectFile);
 
         if (!string.IsNullOrEmpty(task.IntermediateOutputPath))
@@ -44,18 +46,22 @@ public class GitVersionTaskExecutor : IGitVersionTaskExecutor
         var fileWriteInfo = task.IntermediateOutputPath.GetFileWriteInfo(task.Language, task.ProjectFile, "AssemblyInfo");
         task.AssemblyInfoTempFilePath = PathHelper.Combine(fileWriteInfo.WorkingDirectory, fileWriteInfo.FileName);
 
+        if (!this.fileSystem.DirectoryExists(fileWriteInfo.WorkingDirectory))
+        {
+            this.fileSystem.CreateDirectory(fileWriteInfo.WorkingDirectory);
+        }
         var gitVersionOptions = this.options.Value;
-        gitVersionOptions.AssemblyInfo.UpdateAssemblyInfo = true;
-        gitVersionOptions.AssemblyInfo.EnsureAssemblyInfo = true;
         gitVersionOptions.WorkingDirectory = fileWriteInfo.WorkingDirectory;
-        gitVersionOptions.AssemblyInfo.Files.Add(fileWriteInfo.FileName);
+        gitVersionOptions.AssemblySettingsInfo.UpdateAssemblyInfo = true;
+        gitVersionOptions.AssemblySettingsInfo.EnsureAssemblyInfo = true;
+        gitVersionOptions.AssemblySettingsInfo.Files.Add(fileWriteInfo.FileName);
 
         gitVersionOutputTool.UpdateAssemblyInfo(versionVariables);
     }
 
     public void GenerateGitVersionInformation(GenerateGitVersionInformation task)
     {
-        var versionVariables = VersionVariables.FromFile(task.VersionFile, fileSystem);
+        var versionVariables = GitVersionVariables(task);
 
         if (!string.IsNullOrEmpty(task.IntermediateOutputPath))
         {
@@ -66,15 +72,64 @@ public class GitVersionTaskExecutor : IGitVersionTaskExecutor
         var fileWriteInfo = task.IntermediateOutputPath.GetFileWriteInfo(task.Language, task.ProjectFile, "GitVersionInformation");
         task.GitVersionInformationFilePath = PathHelper.Combine(fileWriteInfo.WorkingDirectory, fileWriteInfo.FileName);
 
+        if (!this.fileSystem.DirectoryExists(fileWriteInfo.WorkingDirectory))
+        {
+            this.fileSystem.CreateDirectory(fileWriteInfo.WorkingDirectory);
+        }
         var gitVersionOptions = this.options.Value;
         gitVersionOptions.WorkingDirectory = fileWriteInfo.WorkingDirectory;
+        var targetNamespace = GetTargetNamespace(task);
+        gitVersionOutputTool.GenerateGitVersionInformation(versionVariables, fileWriteInfo, targetNamespace);
+        return;
 
-        gitVersionOutputTool.GenerateGitVersionInformation(versionVariables, fileWriteInfo);
+        static string? GetTargetNamespace(GenerateGitVersionInformation task)
+        {
+            string? targetNamespace = null;
+            if (bool.TryParse(task.UseProjectNamespaceForGitVersionInformation, out var useTargetPathAsRootNamespace) && useTargetPathAsRootNamespace)
+            {
+                targetNamespace = task.RootNamespace;
+                if (string.IsNullOrWhiteSpace(targetNamespace))
+                {
+                    targetNamespace = Path.GetFileNameWithoutExtension(task.ProjectFile);
+                }
+            }
+
+            return targetNamespace;
+        }
     }
 
     public void WriteVersionInfoToBuildLog(WriteVersionInfoToBuildLog task)
     {
-        var versionVariables = VersionVariables.FromFile(task.VersionFile, fileSystem);
-        gitVersionOutputTool.OutputVariables(versionVariables, false);
+        var versionVariables = GitVersionVariables(task);
+
+        var gitVersionOptions = this.options.Value;
+        var configuration = this.configurationProvider.Provide(gitVersionOptions.ConfigurationInfo.OverrideConfiguration);
+
+        gitVersionOutputTool.OutputVariables(versionVariables, configuration.UpdateBuildNumber);
     }
+
+    private void DeleteTempFiles()
+    {
+        var tempPath = FileHelper.TempPath;
+        if (!this.fileSystem.DirectoryExists(tempPath))
+        {
+            return;
+        }
+
+        foreach (var file in this.fileSystem.GetFiles(tempPath))
+        {
+            if (this.fileSystem.GetLastWriteTime(file) >= DateTime.Now.AddDays(-1).Ticks)
+                continue;
+            try
+            {
+                this.fileSystem.Delete(file);
+            }
+            catch (UnauthorizedAccessException)
+            {
+                //ignore contention
+            }
+        }
+    }
+
+    private GitVersionVariables GitVersionVariables(GitVersionTaskBase task) => serializer.FromFile(task.VersionFile);
 }

@@ -15,12 +15,11 @@ modifying your build process.
 Just install with NuGet and GitVersion will automatically generate assembly
 version information that is compiled into the resulting artifact.
 
-It currently works with desktop `MSBuild`. Support for CoreCLR with `dotnet build`
-is coming soon.
+Since version 6.0 only MSBuild running on .NET Core (`dotnet msbuild`) is supported.
 
-> **Note**\
-> The nuget package was "_[GitVersionTask](https://www.nuget.org/packages/GitVersionTask/)_" up until version 5.5.1.\
-> From version 5.6.0 it has been called "_[GitVersion.MsBuild](https://www.nuget.org/packages/GitVersion.MsBuild/)_"
+Unfortunately, up until at least Visual Studio 2022 17.11, Visual Studio runs all builds
+using the .NET Framework version of MSBuild, and therefore **Visual Studio is not supported**. 
+For more information see [this discussion](https://github.com/GitTools/GitVersion/discussions/4130).  
 
 ## TL;DR
 
@@ -40,7 +39,7 @@ If you're using `PackageReference` style NuGet dependencies (VS 2017+), add
 dependency of your package:
 
 ```xml
-<PackageReference Include="GitVersion.MsBuild" Version="5.6.10*">
+<PackageReference Include="GitVersion.MsBuild" Version="6.0.0">
   <PrivateAssets>All</PrivateAssets>
 </PackageReference>
 ```
@@ -51,45 +50,18 @@ The next thing you need to do is to remove the `Assembly*Version` attributes fro
 your `Properties\AssemblyInfo.cs` files. This puts GitVersion.MsBuild in charge of
 versioning your assemblies.
 
-### WPF specific concerns
-
-One further step needs to be taken for SDK-style WPF projects.
-
-Building projects with .NET Core SDK with a version lower than v5.0.200
-requires turning off automatic generation of the different versioning attributes.
-GitVersion usually controls these properties but cannot during WPF specific
-targets that generate a temporary project.
-
-```xml
-<PropertyGroup>
-  <!-- Wpf workaround: GitVersion and .NET SDK < v5.0.200 -->
-  <GenerateAssemblyFileVersionAttribute>false</GenerateAssemblyFileVersionAttribute>
-  <GenerateAssemblyInformationalVersionAttribute>false</GenerateAssemblyInformationalVersionAttribute>
-  <GenerateAssemblyVersionAttribute>false</GenerateAssemblyVersionAttribute>
-</PropertyGroup>
-```
-
-For .NET Core SDK v5.0.200 to v6.0.0-preview.1, a opt-in flag was introduced to
-allow package references to be imported to the temporary project.
-You can now remove the previous versioning attributes and replace them with
-a single property.
-
-```xml
-<PropertyGroup>
-  <!-- WPF workaround: GitVersion and .NET SDK between v5.0.200 and v6.0.0-preview.2  -->
-  <IncludePackageReferencesDuringMarkupCompilation>true</IncludePackageReferencesDuringMarkupCompilation>
-</PropertyGroup>
-```
-
-You can remove all workarounds if you are building with .NET Core SDK
-v6.0.0-preview.2 or later as the flag is now opt-out.
-
 ### Done!
 
 The setup process is now complete and GitVersion.MsBuild should be working its magic,
 versioning your assemblies like a champ. However, more can be done to further
 customize the build process. Keep reading to find out how the version variables
 are set and how you can use them in MSBuild tasks.
+
+## Configuration
+
+The [configuration file](/docs/reference/configuration), if any, is read from a file
+the `GitVersion.yml` the root of the repository or the project directory. Since version 3,
+the path to the configuration file itself [cannot be configured](https://github.com/GitTools/GitVersion/issues/3009).
 
 ## How does it work?
 
@@ -121,10 +93,10 @@ Default sample:
 
 Now, when you build:
 
-*   `AssemblyVersion` will be set to the `AssemblySemVer` variable.
-*   `AssemblyFileVersion` will be set to the `MajorMinorPatch` variable with `.0`
-    appended to it.
-*   `AssemblyInformationalVersion` will be set to the `InformationalVersion` variable.
+* `AssemblyVersion` will be set to the `AssemblySemVer` variable.
+* `AssemblyFileVersion` will be set to the `MajorMinorPatch` variable with `.0`
+  appended to it.
+* `AssemblyInformationalVersion` will be set to the `InformationalVersion` variable.
 
 #### Other injected Variables
 
@@ -258,14 +230,38 @@ For SDK-style projects, `UpdateVersionProperties` controls setting the default
 variables: `Version`, `VersionPrefix`, `VersionSuffix`, `PackageVersion`,
 `InformationalVersion`, `AssemblyVersion` and `FileVersion`.
 
+## Overriding Target Framework
+
+If you want to override the target framework that GitVersion uses to determine the version, you can set the `GitVersionTargetFramework` property in your MSBuild script, like this:
+
+```xml
+<PropertyGroup>
+  ...
+  <GitVersionTargetFramework>net8.0</GitVersionTargetFramework>
+  ...
+</PropertyGroup>
+```
+
+### Namespace generation
+
+You can configure GitVersion to generate the `GitVersionInformation` class in a namespace that matches the current assembly. By default this class is created in the global namespace. If `UseProjectNamespaceForGitVersionInformation` is set to true, the `GitVersionInfomation` class will instead be generated in a namespace matching the current project. If the property `<RootNamespace>` is set that value will be used, otherwise the name of the project file is used.
+
+```xml
+<PropertyGroup>
+  ...
+  <UseProjectNamespaceForGitVersionInformation>true</UseProjectNamespaceForGitVersionInformation>
+  ...
+</PropertyGroup>
+```
+
 ## Extra properties
 
-There are properties that correspont to certain 
+There are properties that correspond to certain
 [command line arguments](/docs/usage/cli/arguments) for GetVersion task.
-In particular, setting `GitVersion_NoFetchEnabled` to `true` disables `git fetch` 
-during version calculation, setting `GitVersion_NoNormalizeEnabled` to `true` disables 
+In particular, setting `GitVersion_NoFetchEnabled` to `true` disables `git fetch`
+during version calculation, setting `GitVersion_NoNormalizeEnabled` to `true` disables
 normalize step on a build server, setting `GitVersion_NoCacheEnabled` to `true`
-makes GetVersion ignore cache. All the rest command line arguments can be passed via 
+makes GetVersion ignore cache. All the rest command line arguments can be passed via
 `GitVersion_CommandLineArguments` variable.
 
 ## My Git repository requires authentication. What should I do?

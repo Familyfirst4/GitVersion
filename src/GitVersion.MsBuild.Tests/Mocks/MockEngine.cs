@@ -1,7 +1,6 @@
 using System.Collections.Concurrent;
 using GitVersion.MsBuild.Tests.Helpers;
 using Microsoft.Build.Framework;
-using Shouldly;
 
 namespace GitVersion.MsBuild.Tests.Mocks;
 
@@ -71,7 +70,7 @@ internal sealed class MockEngine : IBuildEngine4
 
     /// <summary>
     /// Assert that the log file contains the given string.
-    /// Case insensitive.
+    /// Case-insensitive.
     /// </summary>
     /// <param name="contains"></param>
     internal void AssertLogContains(string contains) => Log.ShouldContain(contains);
@@ -90,7 +89,6 @@ internal sealed class MockEngine : IBuildEngine4
         string[] toolsVersion,
         bool useResultsCache,
         bool unloadProjectsOnCompletion) => false;
-
 
     public BuildEngineResult BuildProjectFilesInParallel(
         string[] projectFileNames,

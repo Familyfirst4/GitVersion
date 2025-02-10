@@ -1,9 +1,26 @@
 <?xml version="1.0" encoding="utf-8"?>
+
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
-    <UsingTask TaskName="GetVersion" AssemblyFile="$(GitVersionAssemblyFile)"/>
-    <UsingTask TaskName="GenerateGitVersionInformation" AssemblyFile="$(GitVersionAssemblyFile)"/>
-    <UsingTask TaskName="WriteVersionInfoToBuildLog" AssemblyFile="$(GitVersionAssemblyFile)"/>
-    <UsingTask TaskName="UpdateAssemblyInfo" AssemblyFile="$(GitVersionAssemblyFile)"/>
+    <PropertyGroup>
+        <GenerateGitVersionFiles>false</GenerateGitVersionFiles>
+        <GenerateGitVersionFiles Condition=" '$(Language)' == 'C#' Or '$(Language)' == 'F#' Or '$(Language)' == 'VB' ">true</GenerateGitVersionFiles>
+
+        <UpdateAssemblyInfo Condition=" '$(UpdateAssemblyInfo)' == 'true' And '$(GenerateGitVersionFiles)' == 'true' ">true</UpdateAssemblyInfo>
+        <GenerateGitVersionInformation Condition=" '$(GenerateGitVersionInformation)' == '' And '$(GenerateGitVersionFiles)' == 'true' ">true</GenerateGitVersionInformation>
+
+        <!-- Validates the target framework and sets the GitVersionTargetFramework property to the target framework that is compatible with the target framework of the project -->
+        <GitVersionTargetFramework Condition="'$(GitVersionTargetFramework)' == '' and $([MSBuild]::IsTargetFrameworkCompatible($(TargetFramework), 'net8.0')) == 'true'">net8.0</GitVersionTargetFramework>
+        <GitVersionTargetFramework Condition="'$(GitVersionTargetFramework)' == '' and $([MSBuild]::IsTargetFrameworkCompatible($(TargetFramework), 'net9.0')) == 'true'">net9.0</GitVersionTargetFramework>
+        <!-- Fall back to net8.0 if the target framework is not compatible with net9.0 and net8.0 -->
+        <GitVersionTargetFramework Condition="'$(GitVersionTargetFramework)' == ''">net8.0</GitVersionTargetFramework>
+        <GitVersionFileExe Condition="'$(GitVersionFileExe)' == ''">dotnet --roll-forward Major &quot;$([MSBuild]::EnsureTrailingSlash($(MSBuildThisFileDirectory)$(GitVersionTargetFramework)))gitversion.dll&quot;</GitVersionFileExe>
+        <GitVersionAssemblyFile Condition="'$(GitVersionAssemblyFile)' == ''">$([MSBuild]::EnsureTrailingSlash($(MSBuildThisFileDirectory)$(GitVersionTargetFramework)))GitVersion.MsBuild.dll</GitVersionAssemblyFile>
+    </PropertyGroup>
+
+    <UsingTask TaskName="GetVersion" AssemblyFile="$(GitVersionAssemblyFile)" />
+    <UsingTask TaskName="GenerateGitVersionInformation" AssemblyFile="$(GitVersionAssemblyFile)" />
+    <UsingTask TaskName="WriteVersionInfoToBuildLog" AssemblyFile="$(GitVersionAssemblyFile)" />
+    <UsingTask TaskName="UpdateAssemblyInfo" AssemblyFile="$(GitVersionAssemblyFile)" />
 
     <Target Name="RunGitVersion" Condition="'$(DisableGitVersionTask)' == 'false'">
         <Exec Command="$(GitVersionFileExe) &quot;$(MSBuildProjectDirectory)&quot; $(GitVersion_ToolArgments)" />
@@ -92,19 +109,16 @@
         <GenerateGitVersionInformation SolutionDirectory="$(GitVersionPath)" VersionFile="$(GitVersionOutputFile)"
                                        ProjectFile="$(MSBuildProjectFullPath)"
                                        IntermediateOutputPath="$(IntermediateOutputPath)"
-                                       Language="$(Language)">
+                                       Language="$(Language)"
+                                       UseProjectNamespaceForGitVersionInformation="$(UseProjectNamespaceForGitVersionInformation)"
+                                       RootNamespace="$(RootNamespace)">
 
             <Output TaskParameter="GitVersionInformationFilePath" PropertyName="GitVersionInformationFilePath" />
         </GenerateGitVersionInformation>
         <!-- <Message Importance="High" Text="Info: $(GitVersionInformationFilePath)" /> -->
-
-        <ItemGroup Condition="'$(Language)' == 'F#'">
-            <CompileBefore Include="$(GitVersionInformationFilePath)" />
-        </ItemGroup>
-        <ItemGroup Condition="'$(Language)' != 'F#'">
-            <Compile Include="$(GitVersionInformationFilePath)" />
-        </ItemGroup>
         <ItemGroup>
+            <CompileBefore Include="$(GitVersionInformationFilePath)" Condition=" '$(Language)' == 'F#' " />
+            <Compile Include="$(GitVersionInformationFilePath)" Condition=" '$(Language)' == 'C#' Or '$(Language)' == 'VB' " />
             <FileWrites Include="$(GitVersionInformationFilePath)" />
             <_GeneratedCodeFiles Include="$(GitVersionInformationFilePath)" />
         </ItemGroup>
@@ -117,18 +131,14 @@
                             ProjectFile="$(MSBuildProjectFullPath)"
                             IntermediateOutputPath="$(IntermediateOutputPath)"
                             Language="$(Language)"
-                            CompileFiles ="@(Compile)">
+                            CompileFiles="@(Compile)">
 
             <Output TaskParameter="AssemblyInfoTempFilePath" PropertyName="AssemblyInfoTempFilePath" />
         </UpdateAssemblyInfo>
         <!-- <Message Importance="High" Text="Assembly: $(AssemblyInfoTempFilePath)" /> -->
-        <ItemGroup Condition="'$(Language)' == 'F#'">
-            <CompileBefore Include="$(AssemblyInfoTempFilePath)" />
-        </ItemGroup>
-        <ItemGroup Condition="'$(Language)' != 'F#'">
-            <Compile Include="$(AssemblyInfoTempFilePath)" />
-        </ItemGroup>
         <ItemGroup>
+            <CompileBefore Include="$(AssemblyInfoTempFilePath)" Condition=" '$(Language)' == 'F#' " />
+            <Compile Include="$(AssemblyInfoTempFilePath)" Condition=" '$(Language)' == 'C#' Or '$(Language)' == 'VB' " />
             <FileWrites Include="$(AssemblyInfoTempFilePath)" />
             <_GeneratedCodeFiles Include="$(AssemblyInfoTempFilePath)" />
         </ItemGroup>

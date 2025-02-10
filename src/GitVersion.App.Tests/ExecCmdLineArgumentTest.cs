@@ -1,8 +1,5 @@
-using GitTools.Testing;
 using GitVersion.Core.Tests.Helpers;
 using GitVersion.Helpers;
-using NUnit.Framework;
-using Shouldly;
 
 namespace GitVersion.App.Tests;
 
@@ -17,6 +14,7 @@ public class ExecCmdLineArgumentTest
         var result = GitVersionHelper.ExecuteIn(fixture.RepositoryPath, arguments: " /invalid-argument");
 
         result.ExitCode.ShouldNotBe(0);
+        result.Output.ShouldNotBeNull();
         result.Output.ShouldContain("Could not parse command line parameter '/invalid-argument'");
     }
 
@@ -30,6 +28,7 @@ public class ExecCmdLineArgumentTest
         var result = GitVersionHelper.ExecuteIn(fixture.RepositoryPath, @" /l ""/tmp/path""", false);
 
         result.ExitCode.ShouldBe(0);
+        result.Output.ShouldNotBeNull();
         result.Output.ShouldContain(@"""MajorMinorPatch"": ""1.2.4""");
     }
 
@@ -46,16 +45,28 @@ public class ExecCmdLineArgumentTest
         var result = GitVersionHelper.ExecuteIn(fixture.RepositoryPath, $@" {verbosityArg} -output buildserver /l ""/tmp/path""", false);
 
         result.ExitCode.ShouldBe(0);
+        result.Output.ShouldNotBeNull();
         result.Output.ShouldContain(expectedOutput);
     }
 
     [Test]
     public void WorkingDirectoryWithoutGitFolderFailsWithInformativeMessage()
     {
-        var result = GitVersionHelper.ExecuteIn(System.Environment.SystemDirectory, null, false);
+        var result = GitVersionHelper.ExecuteIn(Path.GetTempPath(), null, false);
 
         result.ExitCode.ShouldNotBe(0);
+        result.Output.ShouldNotBeNull();
         result.Output.ShouldContain("Cannot find the .git directory");
+    }
+
+    [TestCase(" -help")]
+    [TestCase(" -version")]
+    public void WorkingDirectoryWithoutGitFolderDoesNotFailForVersionAndHelp(string argument)
+    {
+        var result = GitVersionHelper.ExecuteIn(workingDirectory: null, arguments: argument);
+
+        result.ExitCode.ShouldBe(0);
+        result.Output.ShouldNotBeNull();
     }
 
     [Test]
@@ -66,13 +77,14 @@ public class ExecCmdLineArgumentTest
         var result = GitVersionHelper.ExecuteIn(fixture.RepositoryPath, null, false);
 
         result.ExitCode.ShouldNotBe(0);
+        result.Output.ShouldNotBeNull();
         result.Output.ShouldContain("No commits found on the current branch.");
     }
 
     [Test]
     public void WorkingDirectoryDoesNotExistFailsWithInformativeMessage()
     {
-        var workingDirectory = PathHelper.Combine(ExecutableHelper.GetCurrentDirectory(), Guid.NewGuid().ToString("N"));
+        var workingDirectory = PathHelper.Combine(PathHelper.GetCurrentDirectory(), Guid.NewGuid().ToString("N"));
         var executable = ExecutableHelper.GetDotNetExecutable();
 
         var output = new StringBuilder();
@@ -84,7 +96,7 @@ public class ExecCmdLineArgumentTest
             null,
             executable,
             args,
-            ExecutableHelper.GetCurrentDirectory());
+            PathHelper.GetCurrentDirectory());
 
         exitCode.ShouldNotBe(0);
         var outputString = output.ToString();

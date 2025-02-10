@@ -17,32 +17,45 @@ expected.
 
 ## Serving the documentation locally
 
-To serve up the documentation locally, you need to run the `build.ps1` script
-with the arguments `-Target Preview-Documentation`.
+To serve up the documentation locally, you need to run the following
+commands:
+
+```shell
+./build.ps1 -Stage build -Target BuildPrepare
+./build.ps1 -Stage build -Target Build
+./build.ps1 -Stage docs -Target PreviewDocs
+```
 
 ### On Windows
 
-On Windows, you need to run the following build command in a PowerShell
+On Windows, you need to run the following commands in a PowerShell
 terminal:
 
 ```shell
-.\build.ps1 -Target Preview-Documentation
+./build.ps1 -Stage build -Target BuildPrepare
+./build.ps1 -Stage build -Target Build
+./build.ps1 -Stage docs -Target PreviewDocs
 ```
 
 ### On Unix
 
 First you need to [install PowerShell on macOS][ps-mac] or [Linux][ps-linux],
-then execute the following command:
+then execute the following commands:
 
 ```shell
-pwsh build.ps1 -Target Preview-Documentation
+./build.ps1 -Stage build -Target BuildPrepare
+./build.ps1 -Stage build -Target Build
+./build.ps1 -Stage docs -Target PreviewDocs
 ```
 
 After pressing enter, the documentation will be generated and then served under
-a local web server.  Information about the URL that can be used to view the docs
-will be shown in the output.  Copy/paste this URL into a browser window.
+a local web server. Information about the URL that can be used to view the docs
+will be shown in the output. Copy/paste this URL into a browser window.
 
 [gitversion.net]: https://gitversion.net/
+
 [forking]: https://guides.github.com/activities/forking/
+
 [ps-mac]: https://docs.microsoft.com/en-us/powershell/scripting/install/installing-powershell-core-on-macos?view=powershell-7.1
+
 [ps-linux]: https://docs.microsoft.com/en-us/powershell/scripting/install/installing-powershell-core-on-linux?view=powershell-7.1
